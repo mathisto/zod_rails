@@ -5,7 +5,7 @@ RSpec.describe ZodRails do
     expect(ZodRails::VERSION).not_to be nil
   end
 
-  it "does something useful" do
-    expect(false).to eq(true)
+  it "provides a generator" do
+    expect(ZodRails::Generator).to be_a(Class)
   end
 end
