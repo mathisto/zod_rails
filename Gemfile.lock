@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    zod_rails (0.1.3)
+    zod_rails (0.1.4)
       logger (~> 1.6)
 
 GEM
