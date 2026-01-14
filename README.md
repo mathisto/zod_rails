@@ -16,7 +16,7 @@ When building Rails APIs consumed by TypeScript frontends, you often duplicate v
 
 - Ruby 3.2+
 - Rails 7.0+ (uses ActiveRecord and Railtie)
-- Zod 3.x in your frontend project
+- Zod 4.x in your frontend project
 
 ## Installation
 
@@ -98,7 +98,7 @@ end
 | `date` | `z.iso.date()` |
 | `datetime`, `timestamp` | `z.iso.datetime()` |
 | `json`, `jsonb` | `z.json()` |
-| `uuid` | `z.string().uuid()` |
+| `uuid` | `z.uuid()` |
 | `enum` | `z.enum([...])` |
 
 ## Validation Mappings
