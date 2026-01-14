@@ -83,24 +83,31 @@ module ZodRails
         return if validation.conditional?
 
         case validation.kind
-        when :presence
-          constraints[:min] = [constraints[:min] || 0, 1].max if base_type == :string
-        when :length
-          opts = validation.options
-          constraints[:length] = opts[:is] if opts[:is]
-          constraints[:min] = [constraints[:min] || 0, opts[:minimum]].max if opts[:minimum]
-          constraints[:max] = [constraints[:max] || Float::INFINITY, opts[:maximum]].min if opts[:maximum]
-        when :numericality
-          handle_numericality_constraint(validation, constraints)
-        when :format
-          regex = validation.options[:with]
-          if regex
-            js_pattern = convert_ruby_regex_to_js(regex)
-            constraints[:others] << ".regex(/#{js_pattern}/)"
-          end
-        when :inclusion
-          handle_inclusion_constraint(validation, constraints)
+        when :presence then handle_presence_constraint(base_type, constraints)
+        when :length then handle_length_constraint(validation, constraints)
+        when :numericality then handle_numericality_constraint(validation, constraints)
+        when :format then handle_format_constraint(validation, constraints)
+        when :inclusion then handle_inclusion_constraint(validation, constraints)
         end
+      end
+
+      def self.handle_presence_constraint(base_type, constraints)
+        constraints[:min] = [constraints[:min] || 0, 1].max if base_type == :string
+      end
+
+      def self.handle_length_constraint(validation, constraints)
+        opts = validation.options
+        constraints[:length] = opts[:is] if opts[:is]
+        constraints[:min] = [constraints[:min] || 0, opts[:minimum]].max if opts[:minimum]
+        constraints[:max] = [constraints[:max] || Float::INFINITY, opts[:maximum]].min if opts[:maximum]
+      end
+
+      def self.handle_format_constraint(validation, constraints)
+        regex = validation.options[:with]
+        return unless regex
+
+        js_pattern = convert_ruby_regex_to_js(regex)
+        constraints[:others] << ".regex(/#{js_pattern}/)"
       end
 
       def self.build_chain(constraints)
@@ -132,22 +139,25 @@ module ZodRails
 
       def self.handle_numericality_constraint(validation, constraints)
         validation.options.each do |key, value|
-          case key
-          when :in
-            if value.is_a?(Range) && value.begin.is_a?(Numeric) && value.end.is_a?(Numeric)
-              constraints[:min] = [constraints[:min] || 0, value.begin].max
-              constraints[:max] = [constraints[:max] || Float::INFINITY, value.end].min
-            end
-          else
-            method = NUMERICALITY_MAP[key]
-            constraints[:others] << ".#{method}(#{value})" if method
+          if key == :in
+            apply_numeric_range(value, constraints)
+          elsif (method = NUMERICALITY_MAP[key])
+            constraints[:others] << ".#{method}(#{value})"
           end
         end
       end
 
+      def self.apply_numeric_range(range, constraints)
+        return unless range.is_a?(Range) && range.begin.is_a?(Numeric) && range.end.is_a?(Numeric)
+
+        constraints[:min] = [constraints[:min] || 0, range.begin].max
+        constraints[:max] = [constraints[:max] || Float::INFINITY, range.end].min
+      end
+
       private_class_method :map_presence, :map_length, :map_numericality, :map_format, :map_inclusion,
                            :convert_ruby_regex_to_js, :collect_constraints, :build_chain,
-                           :handle_inclusion_constraint, :handle_numericality_constraint
+                           :handle_presence_constraint, :handle_length_constraint, :handle_format_constraint,
+                           :handle_inclusion_constraint, :handle_numericality_constraint, :apply_numeric_range
     end
   end
 end

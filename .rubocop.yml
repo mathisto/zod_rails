@@ -1,8 +1,45 @@
 AllCops:
   TargetRubyVersion: 3.2
+  NewCops: enable
+  Exclude:
+    - "vendor/**/*"
+    - "tmp/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+# Gem code is self-documenting; YARD docs added separately
+Style/Documentation:
+  Enabled: false
+
+# RSpec DSL naturally creates long blocks
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+    - "lib/tasks/**/*"
+
+# Allow slightly longer methods for complex mappers
+Metrics/MethodLength:
+  Max: 15
+
+Metrics/AbcSize:
+  Max: 20
+
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/PerceivedComplexity:
+  Max: 10
+
+Metrics/ClassLength:
+  Max: 150
+
+# Gemspec descriptions can be verbose
+Layout/LineLength:
+  Max: 120
+  Exclude:
+    - "*.gemspec"
