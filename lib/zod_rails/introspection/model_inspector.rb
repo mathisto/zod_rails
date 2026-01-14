@@ -14,8 +14,9 @@ module ZodRails
       end
 
       def validations_for(attribute)
+        attr_sym = attribute.to_sym
         model_class.validators.each_with_object([]) do |validator, result|
-          next unless validator.attributes.include?(attribute)
+          next unless validator.attributes.include?(attr_sym)
 
           result << ValidationInfo.from_validator(validator, attribute)
         end

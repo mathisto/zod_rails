@@ -12,7 +12,8 @@ module ZodRails
 
     def generate(model_class)
       inspector = Introspection::ModelInspector.new(model_class)
-      builder = Generation::SchemaBuilder.new(inspector)
+      excluded = ZodRails.configuration.excluded_columns
+      builder = Generation::SchemaBuilder.new(inspector, excluded_columns: excluded)
 
       response_schema = {
         name: builder.schema_name,

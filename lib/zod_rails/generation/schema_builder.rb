@@ -3,14 +3,16 @@
 module ZodRails
   module Generation
     class SchemaBuilder
-      attr_reader :inspector
+      attr_reader :inspector, :excluded_columns
 
-      def initialize(inspector)
+      def initialize(inspector, excluded_columns: [])
         @inspector = inspector
+        @excluded_columns = excluded_columns.map(&:to_s)
       end
 
       def build(input_schema: false)
-        fields = inspector.columns.map do |column|
+        columns = input_schema ? filtered_columns : inspector.columns
+        fields = columns.map do |column|
           field_definition(column, input_schema: input_schema)
         end
 
@@ -77,6 +79,10 @@ module ZodRails
 
       def enum_column?(column_name)
         inspector.enums.key?(column_name)
+      end
+
+      def filtered_columns
+        inspector.columns.reject { |col| excluded_columns.include?(col.name) }
       end
     end
   end

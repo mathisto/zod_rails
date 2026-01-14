@@ -18,6 +18,7 @@ module ZodRails
         when :length then map_length(validation)
         when :numericality then map_numericality(validation)
         when :format then map_format(validation)
+        when :inclusion then map_inclusion(validation)
         else ""
         end
       end
@@ -65,6 +66,13 @@ module ZodRails
         ".regex(/#{js_pattern}/)"
       end
 
+      def self.map_inclusion(validation)
+        values = validation.options[:in] || validation.options[:within]
+        return "" unless values.is_a?(Array)
+
+        ""
+      end
+
       def self.convert_ruby_regex_to_js(regex)
         pattern = regex.source
         pattern = pattern.gsub("\\A", "^")
@@ -83,16 +91,15 @@ module ZodRails
           constraints[:min] = [constraints[:min] || 0, opts[:minimum]].max if opts[:minimum]
           constraints[:max] = [constraints[:max] || Float::INFINITY, opts[:maximum]].min if opts[:maximum]
         when :numericality
-          validation.options.each do |key, value|
-            method = NUMERICALITY_MAP[key]
-            constraints[:others] << ".#{method}(#{value})" if method
-          end
+          handle_numericality_constraint(validation, constraints)
         when :format
           regex = validation.options[:with]
           if regex
             js_pattern = convert_ruby_regex_to_js(regex)
             constraints[:others] << ".regex(/#{js_pattern}/)"
           end
+        when :inclusion
+          handle_inclusion_constraint(validation, constraints)
         end
       end
 
@@ -110,8 +117,37 @@ module ZodRails
         parts.join
       end
 
-      private_class_method :map_presence, :map_length, :map_numericality, :map_format,
-                           :convert_ruby_regex_to_js, :collect_constraints, :build_chain
+      def self.handle_inclusion_constraint(validation, constraints)
+        values = validation.options[:in] || validation.options[:within]
+        return unless values
+
+        case values
+        when Range
+          if values.begin.is_a?(Numeric) && values.end.is_a?(Numeric)
+            constraints[:min] = [constraints[:min] || 0, values.begin].max
+            constraints[:max] = [constraints[:max] || Float::INFINITY, values.end].min
+          end
+        end
+      end
+
+      def self.handle_numericality_constraint(validation, constraints)
+        validation.options.each do |key, value|
+          case key
+          when :in
+            if value.is_a?(Range) && value.begin.is_a?(Numeric) && value.end.is_a?(Numeric)
+              constraints[:min] = [constraints[:min] || 0, value.begin].max
+              constraints[:max] = [constraints[:max] || Float::INFINITY, value.end].min
+            end
+          else
+            method = NUMERICALITY_MAP[key]
+            constraints[:others] << ".#{method}(#{value})" if method
+          end
+        end
+      end
+
+      private_class_method :map_presence, :map_length, :map_numericality, :map_format, :map_inclusion,
+                           :convert_ruby_regex_to_js, :collect_constraints, :build_chain,
+                           :handle_inclusion_constraint, :handle_numericality_constraint
     end
   end
 end

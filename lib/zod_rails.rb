@@ -13,6 +13,7 @@ require_relative "zod_rails/generation/schema_builder"
 require_relative "zod_rails/generation/typescript_emitter"
 require_relative "zod_rails/generation/file_writer"
 require_relative "zod_rails/generator"
+require_relative "zod_rails/railtie" if defined?(Rails::Railtie)
 
 module ZodRails
   class Error < StandardError; end
