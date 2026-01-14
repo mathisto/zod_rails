@@ -1,4 +1,23 @@
-# ZodRails
+<p align="center">
+  <img src="zod_rails.png" alt="ZodRails" width="400">
+</p>
+
+<p align="center">
+  <a href="https://github.com/mathisto/zod_rails/actions/workflows/ci.yml"><img src="https://github.com/mathisto/zod_rails/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://rubygems.org/gems/zod_rails"><img src="https://img.shields.io/gem/v/zod_rails.svg?style=flat" alt="Gem Version"></a>
+  <a href="https://rubygems.org/gems/zod_rails"><img src="https://img.shields.io/gem/dt/zod_rails.svg?style=flat" alt="Downloads"></a>
+  <a href="https://github.com/mathisto/zod_rails/blob/trunk/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/ruby-%3E%3D%203.2-red.svg" alt="Ruby 3.2+">
+  <img src="https://img.shields.io/badge/rails-%3E%3D%207.0-red.svg" alt="Rails 7.0+">
+  <img src="https://img.shields.io/badge/zod-4.x-3068b7.svg" alt="Zod 4">
+</p>
+
+<p align="center">
+  <strong>Generate Zod schemas from ActiveRecord models</strong><br>
+  Bridge the gap between your Rails backend and TypeScript frontend with type-safe validation.
+</p>
+
+---
 
 Generate [Zod](https://zod.dev) schemas from your ActiveRecord models. Bridge the gap between your Rails backend and TypeScript frontend with type-safe validation that stays in sync with your database schema and model validations.
 
