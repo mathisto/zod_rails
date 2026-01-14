@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  test:
+    name: Verify Tests Pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Run tests
+        run: bundle exec rspec
+
+      - name: Run linter
+        run: bundle exec rubocop --parallel
+
+  publish:
+    name: Publish to RubyGems
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Build gem
+        run: gem build *.gemspec
+
+      - name: Publish to GitHub Packages
+        run: |
+          mkdir -p $HOME/.gem
+          echo "---" > $HOME/.gem/credentials
+          echo ":github: Bearer ${{ secrets.GITHUB_TOKEN }}" >> $HOME/.gem/credentials
+          chmod 0600 $HOME/.gem/credentials
+          gem push --key github --host https://rubygems.pkg.github.com/${{ github.repository_owner }} *.gem
+        continue-on-error: true
+
+      - name: Publish to RubyGems
+        run: |
+          mkdir -p $HOME/.gem
+          echo "---" > $HOME/.gem/credentials
+          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_AUTH_TOKEN }}" >> $HOME/.gem/credentials
+          chmod 0600 $HOME/.gem/credentials
+          gem push *.gem
+        env:
+          RUBYGEMS_AUTH_TOKEN: ${{ secrets.RUBYGEMS_AUTH_TOKEN }}

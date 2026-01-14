@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [trunk]
+  pull_request:
+    branches: [trunk]
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby-version: ['3.2', '3.3', '3.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby ${{ matrix.ruby-version }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: true
+
+      - name: Run tests
+        run: bundle exec rspec --format documentation
+
+      - name: Run linter
+        run: bundle exec rubocop --parallel
