@@ -31,6 +31,9 @@ RSpec.describe "End-to-end generation", type: :integration do
                                           attributes: [:email])
     numericality_validator = double(:validator, kind: :numericality, options: { greater_than: 0, less_than: 150 },
                                                 attributes: [:age])
+    score_numericality_validator = double(:validator, kind: :numericality,
+                                                      options: { greater_than_or_equal_to: 0 },
+                                                      attributes: [:score])
 
     klass = class_double("User")
     allow(klass).to receive(:name).and_return("User")
@@ -42,7 +45,8 @@ RSpec.describe "End-to-end generation", type: :integration do
                                                       presence_validator,
                                                       length_validator,
                                                       format_validator,
-                                                      numericality_validator
+                                                      numericality_validator,
+                                                      score_numericality_validator
                                                     ])
     klass
   end
@@ -95,6 +99,7 @@ RSpec.describe "End-to-end generation", type: :integration do
       expect(content).to match(/name: z\.string\(\)\.min\(2\)\.max\(100\)/)
       expect(content).to match(/email: z\.string\(\)\.regex\(/)
       expect(content).to match(/age: z\.int\(\)\.gt\(0\)\.lt\(150\)/)
+      expect(content).to include("score: z.string().nullable()")
     end
 
     it "excludes id/timestamps from input schema" do

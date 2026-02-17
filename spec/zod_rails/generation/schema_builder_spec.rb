@@ -71,6 +71,39 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
       end
     end
 
+    context "with text column and presence validation" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("body", :text, nullable: false)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("body").and_return([
+                                                                                validation_info(:presence)
+                                                                              ])
+      end
+
+      it "produces z.string().min(1)" do
+        schema = builder.build
+        expect(schema).to include("body: z.string().min(1)")
+      end
+    end
+
+    context "with decimal column and numericality validation" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("price", :decimal, nullable: true)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("price").and_return(
+          [validation_info(:numericality, greater_than_or_equal_to: 0)]
+        )
+      end
+
+      it "produces z.string().nullable() with no numeric methods" do
+        schema = builder.build
+        expect(schema).to include("price: z.string().nullable()")
+        expect(schema).not_to include(".gte(")
+      end
+    end
+
     context "with input_schema: true" do
       before do
         allow(inspector).to receive(:columns).and_return([

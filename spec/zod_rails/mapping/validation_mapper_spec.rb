@@ -20,6 +20,10 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         expect(mapper.call(validation, base_type: :string)).to eq(".min(1)")
       end
 
+      it "returns .min(1) for text columns" do
+        expect(mapper.call(validation, base_type: :text)).to eq(".min(1)")
+      end
+
       it "returns empty string for non-strings (handled by nullability)" do
         expect(mapper.call(validation, base_type: :integer)).to eq("")
       end
@@ -44,6 +48,16 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
       it "combines minimum and maximum" do
         validation = build_validation(:length, minimum: 5, maximum: 255)
         expect(mapper.call(validation, base_type: :string)).to eq(".min(5).max(255)")
+      end
+
+      it "works for text columns" do
+        validation = build_validation(:length, minimum: 10)
+        expect(mapper.call(validation, base_type: :text)).to eq(".min(10)")
+      end
+
+      it "returns empty string for non-string types" do
+        validation = build_validation(:length, minimum: 5)
+        expect(mapper.call(validation, base_type: :integer)).to eq("")
       end
     end
 
@@ -72,6 +86,16 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         validation = build_validation(:numericality, greater_than: 0, less_than_or_equal_to: 100)
         expect(mapper.call(validation, base_type: :integer)).to eq(".gt(0).lte(100)")
       end
+
+      it "returns empty string for decimal columns (maps to z.string)" do
+        validation = build_validation(:numericality, greater_than_or_equal_to: 0)
+        expect(mapper.call(validation, base_type: :decimal)).to eq("")
+      end
+
+      it "returns empty string for string columns" do
+        validation = build_validation(:numericality, greater_than: 0)
+        expect(mapper.call(validation, base_type: :string)).to eq("")
+      end
     end
 
     context "with format validation" do
@@ -83,6 +107,11 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
       it "converts Ruby anchors to JS anchors" do
         validation = build_validation(:format, with: /\A\d+\z/)
         expect(mapper.call(validation, base_type: :string)).to eq('.regex(/^\\d+$/)')
+      end
+
+      it "returns empty string for non-string types" do
+        validation = build_validation(:format, with: /\d+/)
+        expect(mapper.call(validation, base_type: :integer)).to eq("")
       end
     end
 
@@ -129,6 +158,42 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         build_validation(:length, minimum: 5)
       ]
       expect(mapper.call_all(validations, base_type: :string)).to eq(".min(5)")
+    end
+
+    it "skips numericality for decimal columns" do
+      validations = [
+        build_validation(:numericality, greater_than_or_equal_to: 0, less_than: 1000)
+      ]
+      expect(mapper.call_all(validations, base_type: :decimal)).to eq("")
+    end
+
+    it "applies numericality for float columns" do
+      validations = [
+        build_validation(:numericality, greater_than: 0, less_than_or_equal_to: 100)
+      ]
+      expect(mapper.call_all(validations, base_type: :float)).to eq(".gt(0).lte(100)")
+    end
+
+    it "applies presence and length for text columns" do
+      validations = [
+        build_validation(:presence),
+        build_validation(:length, minimum: 10, maximum: 5000)
+      ]
+      expect(mapper.call_all(validations, base_type: :text)).to eq(".min(10).max(5000)")
+    end
+
+    it "skips length for non-string types" do
+      validations = [
+        build_validation(:length, minimum: 5, maximum: 100)
+      ]
+      expect(mapper.call_all(validations, base_type: :integer)).to eq("")
+    end
+
+    it "skips format for non-string types" do
+      validations = [
+        build_validation(:format, with: /\d+/)
+      ]
+      expect(mapper.call_all(validations, base_type: :integer)).to eq("")
     end
   end
 

@@ -10,14 +10,17 @@ module ZodRails
         less_than_or_equal_to: "lte"
       }.freeze
 
+      NUMERIC_ZOD_TYPES = %i[integer float].freeze
+      STRING_ZOD_TYPES = %i[string text].freeze
+
       def self.call(validation, base_type:)
         return "" if validation.conditional?
 
         case validation.kind
         when :presence then map_presence(validation, base_type)
-        when :length then map_length(validation)
-        when :numericality then map_numericality(validation)
-        when :format then map_format(validation)
+        when :length then map_length(validation, base_type)
+        when :numericality then map_numericality(validation, base_type)
+        when :format then map_format(validation, base_type)
         when :inclusion then map_inclusion(validation)
         else ""
         end
@@ -34,10 +37,12 @@ module ZodRails
       end
 
       def self.map_presence(_validation, base_type)
-        base_type == :string ? ".min(1)" : ""
+        STRING_ZOD_TYPES.include?(base_type) ? ".min(1)" : ""
       end
 
-      def self.map_length(validation)
+      def self.map_length(validation, base_type)
+        return "" unless STRING_ZOD_TYPES.include?(base_type)
+
         parts = []
         opts = validation.options
 
@@ -51,14 +56,18 @@ module ZodRails
         parts.join
       end
 
-      def self.map_numericality(validation)
+      def self.map_numericality(validation, base_type)
+        return "" unless NUMERIC_ZOD_TYPES.include?(base_type)
+
         validation.options.filter_map do |key, value|
           method = NUMERICALITY_MAP[key]
           ".#{method}(#{value})" if method
         end.join
       end
 
-      def self.map_format(validation)
+      def self.map_format(validation, base_type)
+        return "" unless STRING_ZOD_TYPES.include?(base_type)
+
         regex = validation.options[:with]
         return "" unless regex
 
@@ -84,25 +93,29 @@ module ZodRails
 
         case validation.kind
         when :presence then handle_presence_constraint(base_type, constraints)
-        when :length then handle_length_constraint(validation, constraints)
-        when :numericality then handle_numericality_constraint(validation, constraints)
-        when :format then handle_format_constraint(validation, constraints)
+        when :length then handle_length_constraint(validation, base_type, constraints)
+        when :numericality then handle_numericality_constraint(validation, base_type, constraints)
+        when :format then handle_format_constraint(validation, base_type, constraints)
         when :inclusion then handle_inclusion_constraint(validation, constraints)
         end
       end
 
       def self.handle_presence_constraint(base_type, constraints)
-        constraints[:min] = [constraints[:min] || 0, 1].max if base_type == :string
+        constraints[:min] = [constraints[:min] || 0, 1].max if STRING_ZOD_TYPES.include?(base_type)
       end
 
-      def self.handle_length_constraint(validation, constraints)
+      def self.handle_length_constraint(validation, base_type, constraints)
+        return unless STRING_ZOD_TYPES.include?(base_type)
+
         opts = validation.options
         constraints[:length] = opts[:is] if opts[:is]
         constraints[:min] = [constraints[:min] || 0, opts[:minimum]].max if opts[:minimum]
         constraints[:max] = [constraints[:max] || Float::INFINITY, opts[:maximum]].min if opts[:maximum]
       end
 
-      def self.handle_format_constraint(validation, constraints)
+      def self.handle_format_constraint(validation, base_type, constraints)
+        return unless STRING_ZOD_TYPES.include?(base_type)
+
         regex = validation.options[:with]
         return unless regex
 
@@ -137,7 +150,9 @@ module ZodRails
         end
       end
 
-      def self.handle_numericality_constraint(validation, constraints)
+      def self.handle_numericality_constraint(validation, base_type, constraints)
+        return unless NUMERIC_ZOD_TYPES.include?(base_type)
+
         validation.options.each do |key, value|
           if key == :in
             apply_numeric_range(value, constraints)
