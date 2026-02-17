@@ -120,6 +120,8 @@ end
 | `datetime`, `timestamp` | `z.iso.datetime()` |
 | `json`, `jsonb` | `z.json()` |
 | `uuid` | `z.uuid()` |
+| `time` | `z.string()` |
+| `binary` | `z.string()` |
 | `enum` | `z.enum([...])` |
 
 ## Validation Mappings
@@ -128,7 +130,7 @@ ZodRails introspects your model validations and maps them to Zod constraints:
 
 | Rails Validation | Zod Constraint |
 |------------------|----------------|
-| `presence: true` | `.min(1)` for strings |
+| `presence: true` | `.min(1)` for string/text columns |
 | `length: { minimum: n }` | `.min(n)` |
 | `length: { maximum: n }` | `.max(n)` |
 | `length: { is: n }` | `.length(n)` |
@@ -160,7 +162,7 @@ import { z } from "zod";
 
 export const UserSchema = z.object({
   id: z.int(),
-  email: z.string().min(1).regex(/\A[^@\s]+@[^@\s]+\z/),
+  email: z.string().min(1).regex(/^[^@\s]+@[^@\s]+$/),
   name: z.string().min(2).max(100),
   age: z.int().gt(0).lt(150).nullable(),
   role: z.enum(["member", "admin", "moderator"]),
@@ -171,7 +173,7 @@ export const UserSchema = z.object({
 export type User = z.infer<typeof UserSchema>;
 
 export const UserInputSchema = z.object({
-  email: z.string().min(1).regex(/\A[^@\s]+@[^@\s]+\z/),
+  email: z.string().min(1).regex(/^[^@\s]+@[^@\s]+$/),
   name: z.string().min(2).max(100),
   age: z.int().gt(0).lt(150).nullish(),
   role: z.enum(["member", "admin", "moderator"]).optional()
@@ -193,7 +195,7 @@ ZodRails generates two schema variants:
 - Represents data for form submission
 - Excludes configured columns (defaults: `id`, `created_at`, `updated_at`)
 - Uses `.optional()` for columns with database defaults
-- Uses `.nullish()` for nullable columns without defaults
+- Uses `.nullish()` for nullable columns (accepts both `null` and `undefined`)
 
 ## Integrating with Forms
 
