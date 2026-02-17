@@ -111,8 +111,10 @@ end
 | Rails/DB Type | Zod Type |
 |---------------|----------|
 | `string`, `text` | `z.string()` |
-| `integer`, `bigint` | `z.int()` |
-| `float`, `decimal` | `z.number()` |
+| `integer` | `z.int()` |
+| `float` | `z.number()` |
+| `bigint` | `z.string()` (avoids JS `Number` overflow) |
+| `decimal` | `z.string()` (preserves `BigDecimal` precision) |
 | `boolean` | `z.boolean()` |
 | `date` | `z.iso.date()` |
 | `datetime`, `timestamp` | `z.iso.datetime()` |
@@ -259,6 +261,15 @@ Ensure validations are defined on the model class, not in concerns that might no
 ### Custom column types
 
 For custom types not in the mapping table, ZodRails falls back to `z.unknown()`. Open an issue if you need support for additional types.
+
+## Releasing
+
+1. Bump the version in `lib/zod_rails/version.rb`
+2. Commit: `git commit -am 'Bump version to x.y.z'`
+3. Tag: `git tag v<x.y.z>`
+4. Push with tags: `git push origin trunk --tags`
+
+The `v*` tag push triggers the [release workflow](.github/workflows/release.yml), which runs CI and publishes to RubyGems via Trusted Publishing.
 
 ## Development
 
