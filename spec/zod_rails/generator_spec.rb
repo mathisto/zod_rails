@@ -77,4 +77,48 @@ RSpec.describe ZodRails::Generator do
       expect(files).to contain_exactly("article.ts", "user.ts")
     end
   end
+
+  describe "post_generate_command" do
+    before do
+      allow(model_class).to receive(:name).and_return("Article")
+      allow(model_class).to receive(:columns).and_return([
+                                                           double(:col, name: "id", type: :integer, null: false,
+                                                                        default: 1)
+                                                         ])
+      allow(model_class).to receive(:validators).and_return([])
+      allow(model_class).to receive(:defined_enums).and_return({})
+    end
+
+    after { ZodRails.reset_configuration! }
+
+    it "does nothing when post_generate_command is nil" do
+      expect { generator.generate_all([model_class]) }.not_to raise_error
+      expect(File.exist?(File.join(output_dir, "article.ts"))).to be true
+    end
+
+    it "runs the configured command after a successful generation" do
+      Dir.mktmpdir do |dir|
+        sentinel = File.join(dir, "ran")
+        ZodRails.configure { |c| c.post_generate_command = "touch '#{sentinel}'" }
+
+        generator.generate_all([model_class])
+
+        expect(File.exist?(sentinel)).to be true
+      end
+    end
+
+    it "raises ZodRails::Error when the post command exits nonzero" do
+      ZodRails.configure { |c| c.post_generate_command = "false" }
+
+      expect { generator.generate_all([model_class]) }
+        .to raise_error(ZodRails::Error, /post_generate_command/)
+    end
+
+    it "still writes the files when the post command fails" do
+      ZodRails.configure { |c| c.post_generate_command = "false" }
+
+      expect { generator.generate_all([model_class]) }.to raise_error(ZodRails::Error)
+      expect(File.exist?(File.join(output_dir, "article.ts"))).to be true
+    end
+  end
 end

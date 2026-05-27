@@ -29,6 +29,10 @@ RSpec.describe ZodRails::Configuration do
     it "sets models to empty array" do
       expect(config.models).to eq([])
     end
+
+    it "sets post_generate_command to nil" do
+      expect(config.post_generate_command).to be_nil
+    end
   end
 
   describe "configuration" do
@@ -45,6 +49,11 @@ RSpec.describe ZodRails::Configuration do
     it "allows setting models" do
       config.models = %w[User Article]
       expect(config.models).to eq(%w[User Article])
+    end
+
+    it "allows setting post_generate_command" do
+      config.post_generate_command = "bun run prettier --write 'schemas/**/*.ts'"
+      expect(config.post_generate_command).to eq("bun run prettier --write 'schemas/**/*.ts'")
     end
   end
 end

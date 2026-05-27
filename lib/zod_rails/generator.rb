@@ -33,7 +33,23 @@ module ZodRails
     end
 
     def generate_all(model_classes)
-      model_classes.map { |klass| generate(klass) }
+      files = model_classes.map { |klass| generate(klass) }
+      run_post_generate_command
+      files
+    end
+
+    private
+
+    def run_post_generate_command
+      cmd = ZodRails.configuration.post_generate_command
+      return if cmd.nil? || cmd.to_s.strip.empty?
+
+      ok = system(cmd)
+      return if ok
+
+      exit_status = Process.last_status&.exitstatus
+      raise ZodRails::Error,
+            "post_generate_command failed (exit #{exit_status}): #{cmd}"
     end
   end
 end
