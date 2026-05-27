@@ -115,6 +115,66 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
       end
     end
 
+    context "with array inclusion validation" do
+      it "maps a string array on a string column to .pipe(z.enum(...))" do
+        validation = build_validation(:inclusion, in: %w[pending approved not_applicable])
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.pipe(z.enum(["pending", "approved", "not_applicable"]))'
+        )
+      end
+
+      it "maps a string array on a text column to .pipe(z.enum(...))" do
+        validation = build_validation(:inclusion, in: %w[low high])
+        expect(mapper.call(validation, base_type: :text)).to eq('.pipe(z.enum(["low", "high"]))')
+      end
+
+      it "maps a multi-element numeric array on an integer column to .pipe(z.union(...))" do
+        validation = build_validation(:inclusion, in: [1, 5, 10])
+        expect(mapper.call(validation, base_type: :integer)).to eq(
+          ".pipe(z.union([z.literal(1), z.literal(5), z.literal(10)]))"
+        )
+      end
+
+      it "maps a single-element numeric array to .pipe(z.literal(...))" do
+        validation = build_validation(:inclusion, in: [42])
+        expect(mapper.call(validation, base_type: :integer)).to eq(".pipe(z.literal(42))")
+      end
+
+      it "maps a numeric array on a float column" do
+        validation = build_validation(:inclusion, in: [0.0, 1.5])
+        expect(mapper.call(validation, base_type: :float)).to eq(
+          ".pipe(z.union([z.literal(0.0), z.literal(1.5)]))"
+        )
+      end
+
+      it "skips a string array on an integer column (type mismatch)" do
+        validation = build_validation(:inclusion, in: %w[a b])
+        expect(mapper.call(validation, base_type: :integer)).to eq("")
+      end
+
+      it "skips a numeric array on a string column (type mismatch)" do
+        validation = build_validation(:inclusion, in: [1, 2])
+        expect(mapper.call(validation, base_type: :string)).to eq("")
+      end
+
+      it "skips a mixed-type array" do
+        validation = build_validation(:inclusion, in: ["a", 1])
+        expect(mapper.call(validation, base_type: :string)).to eq("")
+      end
+
+      it "skips an empty array" do
+        validation = build_validation(:inclusion, in: [])
+        expect(mapper.call(validation, base_type: :string)).to eq("")
+      end
+
+      it "escapes embedded double quotes in string values" do
+        validation = build_validation(:inclusion, in: ['has "quotes"', "normal"])
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.pipe(z.enum(["has \\"quotes\\"", "normal"]))'
+        )
+      end
+    end
+
     context "with conditional validation" do
       let(:validation) do
         ZodRails::Introspection::ValidationInfo.new(
@@ -194,6 +254,23 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         build_validation(:format, with: /\d+/)
       ]
       expect(mapper.call_all(validations, base_type: :integer)).to eq("")
+    end
+
+    it "combines presence and array inclusion into .min(1).pipe(z.enum(...))" do
+      validations = [
+        build_validation(:presence),
+        build_validation(:inclusion, in: %w[pending approved])
+      ]
+      expect(mapper.call_all(validations, base_type: :string)).to eq(
+        '.min(1).pipe(z.enum(["pending", "approved"]))'
+      )
+    end
+
+    it "still maps Range inclusion to .min/.max (unchanged Range branch)" do
+      validations = [
+        build_validation(:inclusion, in: 1..5)
+      ]
+      expect(mapper.call_all(validations, base_type: :integer)).to eq(".min(1).max(5)")
     end
   end
 
