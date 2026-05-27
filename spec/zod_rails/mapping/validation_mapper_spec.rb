@@ -113,6 +113,16 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         validation = build_validation(:format, with: /\d+/)
         expect(mapper.call(validation, base_type: :integer)).to eq("")
       end
+
+      it "preserves the case-insensitive /i flag" do
+        validation = build_validation(:format, with: /\A[a-z]+\z/i)
+        expect(mapper.call(validation, base_type: :string)).to eq(".regex(/^[a-z]+$/i)")
+      end
+
+      it "omits flags when none are set" do
+        validation = build_validation(:format, with: /\A[a-z]+\z/)
+        expect(mapper.call(validation, base_type: :string)).to eq(".regex(/^[a-z]+$/)")
+      end
     end
 
     context "with conditional validation" do
