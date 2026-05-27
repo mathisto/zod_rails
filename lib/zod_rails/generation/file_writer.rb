@@ -17,6 +17,10 @@ module ZodRails
         File.write(full_path, content)
       end
 
+      def preview(filename:, content:)
+        content
+      end
+
       def output_path_for(model_name)
         parts = model_name.split("::")
         filename = underscore(parts.pop)
