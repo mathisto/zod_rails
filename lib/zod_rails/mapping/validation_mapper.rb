@@ -85,17 +85,31 @@ module ZodRails
       def self.build_array_inclusion_suffix(values, base_type)
         return nil if values.empty?
 
-        if values.all? { |v| v.is_a?(String) } && STRING_ZOD_TYPES.include?(base_type)
-          quoted = values.map { |v| %("#{escape_quotes(v)}") }.join(", ")
-          ".pipe(z.enum([#{quoted}]))"
-        elsif values.all? { |v| v.is_a?(Numeric) } && NUMERIC_ZOD_TYPES.include?(base_type)
-          if values.length == 1
-            ".pipe(z.literal(#{values.first}))"
-          else
-            literals = values.map { |v| "z.literal(#{v})" }.join(", ")
-            ".pipe(z.union([#{literals}]))"
-          end
+        if string_array_for_string_type?(values, base_type)
+          build_string_enum_suffix(values)
+        elsif numeric_array_for_numeric_type?(values, base_type)
+          build_numeric_literal_suffix(values)
         end
+      end
+
+      def self.string_array_for_string_type?(values, base_type)
+        STRING_ZOD_TYPES.include?(base_type) && values.all? { |v| v.is_a?(String) }
+      end
+
+      def self.numeric_array_for_numeric_type?(values, base_type)
+        NUMERIC_ZOD_TYPES.include?(base_type) && values.all? { |v| v.is_a?(Numeric) }
+      end
+
+      def self.build_string_enum_suffix(values)
+        quoted = values.map { |v| %("#{escape_quotes(v)}") }.join(", ")
+        ".pipe(z.enum([#{quoted}]))"
+      end
+
+      def self.build_numeric_literal_suffix(values)
+        return ".pipe(z.literal(#{values.first}))" if values.length == 1
+
+        literals = values.map { |v| "z.literal(#{v})" }.join(", ")
+        ".pipe(z.union([#{literals}]))"
       end
 
       def self.escape_quotes(str)
@@ -110,7 +124,7 @@ module ZodRails
 
       def self.regex_flags_for(regex)
         flags = +""
-        flags << "i" if (regex.options & Regexp::IGNORECASE).positive?
+        flags << "i" if regex.options.anybits?(Regexp::IGNORECASE)
         flags
       end
 
@@ -165,18 +179,23 @@ module ZodRails
 
       def self.handle_inclusion_constraint(validation, base_type, constraints)
         values = validation.options[:in] || validation.options[:within]
-        return unless values
 
         case values
-        when Range
-          if values.begin.is_a?(Numeric) && values.end.is_a?(Numeric)
-            constraints[:min] = [constraints[:min] || 0, values.begin].max
-            constraints[:max] = [constraints[:max] || Float::INFINITY, values.end].min
-          end
-        when Array
-          suffix = build_array_inclusion_suffix(values, base_type)
-          constraints[:others] << suffix if suffix
+        when Range then apply_range_inclusion(values, constraints)
+        when Array then apply_array_inclusion(values, base_type, constraints)
         end
+      end
+
+      def self.apply_range_inclusion(range, constraints)
+        return unless range.begin.is_a?(Numeric) && range.end.is_a?(Numeric)
+
+        constraints[:min] = [constraints[:min] || 0, range.begin].max
+        constraints[:max] = [constraints[:max] || Float::INFINITY, range.end].min
+      end
+
+      def self.apply_array_inclusion(values, base_type, constraints)
+        suffix = build_array_inclusion_suffix(values, base_type)
+        constraints[:others] << suffix if suffix
       end
 
       def self.handle_numericality_constraint(validation, base_type, constraints)
@@ -199,10 +218,13 @@ module ZodRails
       end
 
       private_class_method :map_presence, :map_length, :map_numericality, :map_format, :map_inclusion,
-                           :build_array_inclusion_suffix, :escape_quotes,
+                           :build_array_inclusion_suffix, :string_array_for_string_type?,
+                           :numeric_array_for_numeric_type?, :build_string_enum_suffix,
+                           :build_numeric_literal_suffix, :escape_quotes,
                            :convert_ruby_regex_to_js, :regex_flags_for, :collect_constraints, :build_chain,
                            :handle_presence_constraint, :handle_length_constraint, :handle_format_constraint,
-                           :handle_inclusion_constraint, :handle_numericality_constraint, :apply_numeric_range
+                           :handle_inclusion_constraint, :apply_range_inclusion, :apply_array_inclusion,
+                           :handle_numericality_constraint, :apply_numeric_range
     end
   end
 end

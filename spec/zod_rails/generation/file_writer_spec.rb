@@ -77,7 +77,7 @@ RSpec.describe ZodRails::Generation::FileWriter do
     end
 
     it "preserves a tail custom block across regen" do
-      File.write(full_path, generated + "\n" + tail_block)
+      File.write(full_path, "#{generated}\n#{tail_block}")
 
       writer.write(filename: filename, content: generated)
 
@@ -104,10 +104,11 @@ RSpec.describe ZodRails::Generation::FileWriter do
     end
 
     it "preserves both blocks simultaneously" do
-      with_both = generated.sub(
+      with_imports_only = generated.sub(
         /^(import \{ z \} from "zod";\n)/,
         "\\1\n#{imports_block}"
-      ) + "\n" + tail_block
+      )
+      with_both = "#{with_imports_only}\n#{tail_block}"
       File.write(full_path, with_both)
 
       writer.write(filename: filename, content: generated)
@@ -120,7 +121,7 @@ RSpec.describe ZodRails::Generation::FileWriter do
     end
 
     it "is idempotent across repeated regens" do
-      File.write(full_path, generated + "\n" + tail_block)
+      File.write(full_path, "#{generated}\n#{tail_block}")
 
       writer.write(filename: filename, content: generated)
       first_pass = File.read(full_path)
@@ -132,7 +133,7 @@ RSpec.describe ZodRails::Generation::FileWriter do
     end
 
     it "places the tail block at the end of the file" do
-      File.write(full_path, generated + "\n" + tail_block)
+      File.write(full_path, "#{generated}\n#{tail_block}")
       writer.write(filename: filename, content: generated)
       result = File.read(full_path)
 

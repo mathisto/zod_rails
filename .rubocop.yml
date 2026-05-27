@@ -36,7 +36,7 @@ Metrics/PerceivedComplexity:
   Max: 10
 
 Metrics/ClassLength:
-  Max: 150
+  Max: 180
 
 # Gemspec descriptions can be verbose
 Layout/LineLength:

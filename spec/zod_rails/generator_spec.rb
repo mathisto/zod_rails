@@ -179,7 +179,6 @@ RSpec.describe ZodRails::Generator do
     end
 
     it "does not write anything to disk" do
-      mtime_before = nil
       generator.generate(model_class)
       mtime_before = File.mtime(File.join(output_dir, "article.ts"))
       sleep 0.01

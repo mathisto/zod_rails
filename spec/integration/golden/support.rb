@@ -11,28 +11,28 @@ module ZodRails
     module_function
 
     def build(spec)
-      columns = spec.fetch(:columns, []).map do |c|
-        Column.new(
-          name: c.fetch(:name),
-          type: c.fetch(:type),
-          null: c.fetch(:null, true),
-          default: c[:default]
-        )
-      end
-
-      validators = spec.fetch(:validators, []).map do |v|
-        Validator.new(
-          kind: v.fetch(:kind),
-          attributes: v.fetch(:attributes),
-          options: v.fetch(:options, {})
-        )
-      end
-
       ModelDouble.new(
         name: spec.fetch(:name),
-        columns: columns,
+        columns: spec.fetch(:columns, []).map { |c| build_column(c) },
         defined_enums: spec.fetch(:enums, {}),
-        validators: validators
+        validators: spec.fetch(:validators, []).map { |v| build_validator(v) }
+      )
+    end
+
+    def build_column(spec)
+      Column.new(
+        name: spec.fetch(:name),
+        type: spec.fetch(:type),
+        null: spec.fetch(:null, true),
+        default: spec[:default]
+      )
+    end
+
+    def build_validator(spec)
+      Validator.new(
+        kind: spec.fetch(:kind),
+        attributes: spec.fetch(:attributes),
+        options: spec.fetch(:options, {})
       )
     end
 

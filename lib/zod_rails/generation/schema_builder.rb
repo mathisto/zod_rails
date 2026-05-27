@@ -4,6 +4,7 @@ module ZodRails
   module Generation
     class SchemaBuilder
       STRING_TYPES = %i[string text].freeze
+      NULLABILITY_SUFFIX_RE = /(\.(?:nullable|nullish|optional)\(\))\z/
 
       attr_reader :inspector, :excluded_columns
 
@@ -23,7 +24,7 @@ module ZodRails
 
       def schema_name(input_schema: false)
         suffix = input_schema ? "InputSchema" : "Schema"
-        "#{inspector.model_name.gsub('::', '')}#{suffix}"
+        "#{inspector.model_name.gsub("::", "")}#{suffix}"
       end
 
       private
@@ -46,15 +47,15 @@ module ZodRails
       def string_array_inclusion_values(column)
         return nil unless STRING_TYPES.include?(column.type)
 
-        inclusion = inspector.validations_for(column.name).find do |v|
-          v.kind == :inclusion &&
-            !v.conditional? &&
-            v.options[:in].is_a?(Array) &&
-            !v.options[:in].empty? &&
-            v.options[:in].all? { |x| x.is_a?(String) }
-        end
-
+        inclusion = inspector.validations_for(column.name).find { |v| string_array_inclusion?(v) }
         inclusion&.options&.[](:in)
+      end
+
+      def string_array_inclusion?(validation)
+        return false unless validation.kind == :inclusion && !validation.conditional?
+
+        values = validation.options[:in]
+        values.is_a?(Array) && !values.empty? && values.all? { |x| x.is_a?(String) }
       end
 
       def build_inclusion_enum_type(column, values, input_schema:)
@@ -88,8 +89,6 @@ module ZodRails
         validation_chain = Mapping::ValidationMapper.call_all(validations, base_type: column.type)
         insert_validation_chain(base_type, validation_chain)
       end
-
-      NULLABILITY_SUFFIX_RE = /(\.(?:nullable|nullish|optional)\(\))\z/
 
       def insert_validation_chain(base_type, validation_chain)
         return base_type if validation_chain.empty?

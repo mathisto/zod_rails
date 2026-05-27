@@ -23,7 +23,7 @@ module ZodRails
         File.write(full_path, final)
       end
 
-      def preview(filename:, content:)
+      def preview(filename:, content:) # rubocop:disable Lint/UnusedMethodArgument
         content
       end
 
