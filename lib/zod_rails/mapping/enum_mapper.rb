@@ -4,8 +4,9 @@ module ZodRails
   module Mapping
     class EnumMapper
       def self.call(values, nullable: false, input_schema: false, has_default: false)
-        keys = values.keys.map { |k| "\"#{escape_quotes(k)}\"" }
-        base = "z.enum([#{keys.join(", ")}])"
+        names = values.is_a?(Hash) ? values.keys : values
+        quoted = names.map { |k| "\"#{escape_quotes(k)}\"" }
+        base = "z.enum([#{quoted.join(", ")}])"
 
         suffix = determine_suffix(nullable: nullable, input_schema: input_schema, has_default: has_default)
         "#{base}#{suffix}"

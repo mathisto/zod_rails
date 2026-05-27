@@ -88,6 +88,60 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
       end
     end
 
+    context "with a string column and array inclusion (0.2 base-type swap)" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("decision", :string, nullable: false)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("decision").and_return([
+                                                                                    validation_info(:presence),
+                                                                                    validation_info(:inclusion,
+                                                                                                    in: %w[a b c])
+                                                                                  ])
+      end
+
+      it "emits z.enum as the base type, dropping .min(1)/.pipe noise" do
+        schema = builder.build
+        expect(schema).to include('decision: z.enum(["a", "b", "c"])')
+        expect(schema).not_to include(".pipe")
+        expect(schema).not_to include(".min(1)")
+      end
+    end
+
+    context "with a nullable string column and array inclusion" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("priority", :string, nullable: true)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("priority").and_return([
+                                                                                    validation_info(:inclusion,
+                                                                                                    in: %w[low high])
+                                                                                  ])
+      end
+
+      it "keeps the .nullable() suffix after the swap" do
+        schema = builder.build
+        expect(schema).to include('priority: z.enum(["low", "high"]).nullable()')
+      end
+    end
+
+    context "with a numeric column and array inclusion (falls back to .pipe)" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("level", :integer, nullable: false)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("level").and_return([
+                                                                                 validation_info(:inclusion,
+                                                                                                 in: [1, 2, 3])
+                                                                               ])
+      end
+
+      it "still uses .pipe(z.union(...)) since z.enum is string-only" do
+        schema = builder.build
+        expect(schema).to include("level: z.int().pipe(z.union([z.literal(1), z.literal(2), z.literal(3)]))")
+      end
+    end
+
     context "with text column and presence validation" do
       before do
         allow(inspector).to receive(:columns).and_return([
