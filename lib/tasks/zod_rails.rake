@@ -6,12 +6,22 @@ namespace :zod_rails do
     config = ZodRails.configuration
     generator = ZodRails::Generator.new(output_dir: config.output_dir)
 
-    models = config.models.map(&:constantize)
-
-    if models.empty?
+    if config.models.empty?
       puts "No models configured. Add models to ZodRails.configure { |c| c.models = ['User', 'Article'] }"
       exit 1
     end
+
+    resolution = ZodRails::ModelResolver.resolve(config.models)
+
+    unless resolution[:missing].empty?
+      puts "ZodRails: #{resolution[:missing].size} model(s) in config.models could not be loaded:"
+      resolution[:missing].each { |m| puts "  - #{m}" }
+      puts ""
+      puts "Check the model names in config/initializers/zod_rails.rb."
+      exit 1
+    end
+
+    models = resolution[:resolved]
 
     if ENV["DRY_RUN"] == "1"
       drift = generator.check(models)
@@ -33,14 +43,20 @@ namespace :zod_rails do
     config = ZodRails.configuration
     generator = ZodRails::Generator.new(output_dir: config.output_dir)
 
-    models = config.models.map(&:constantize)
-
-    if models.empty?
+    if config.models.empty?
       puts "No models configured. Nothing to check."
       exit 0
     end
 
-    drift = generator.check(models)
+    resolution = ZodRails::ModelResolver.resolve(config.models)
+
+    unless resolution[:missing].empty?
+      puts "ZodRails: #{resolution[:missing].size} model(s) in config.models could not be loaded:"
+      resolution[:missing].each { |m| puts "  - #{m}" }
+      exit 1
+    end
+
+    drift = generator.check(resolution[:resolved])
 
     if drift.empty?
       puts "ZodRails: generated schemas are up to date."
@@ -65,8 +81,13 @@ namespace :zod_rails do
     config = ZodRails.configuration
     generator = ZodRails::Generator.new(output_dir: config.output_dir)
 
-    model_class = model_name.constantize
-    filename = generator.generate(model_class)
+    resolution = ZodRails::ModelResolver.resolve([model_name])
+    if resolution[:missing].any?
+      puts "ZodRails: model '#{model_name}' could not be loaded. Check the spelling."
+      exit 1
+    end
+
+    filename = generator.generate(resolution[:resolved].first)
     puts "Generated: #{filename}"
   end
 end
