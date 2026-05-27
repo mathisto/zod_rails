@@ -71,6 +71,23 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
       end
     end
 
+    context "with a nullable column and a validation chain" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("name", :string, nullable: true)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("name").and_return([
+                                                                                validation_info(:presence),
+                                                                                validation_info(:length, maximum: 50)
+                                                                              ])
+      end
+
+      it "inserts the chain before the nullable suffix" do
+        schema = builder.build
+        expect(schema).to include("name: z.string().min(1).max(50).nullable()")
+      end
+    end
+
     context "with text column and presence validation" do
       before do
         allow(inspector).to receive(:columns).and_return([

@@ -62,16 +62,13 @@ module ZodRails
         insert_validation_chain(base_type, validation_chain)
       end
 
+      NULLABILITY_SUFFIX_RE = /(\.(?:nullable|nullish|optional)\(\))\z/
+
       def insert_validation_chain(base_type, validation_chain)
         return base_type if validation_chain.empty?
 
-        if base_type.include?(".nullable()") || base_type.include?(".nullish()") || base_type.include?(".optional()")
-          suffix_match = base_type.match(/(\.(nullable|nullish|optional)\(\))$/)
-          if suffix_match
-            base_type.sub(suffix_match[0], "#{validation_chain}#{suffix_match[0]}")
-          else
-            "#{base_type}#{validation_chain}"
-          end
+        if (match = base_type.match(NULLABILITY_SUFFIX_RE))
+          base_type.sub(NULLABILITY_SUFFIX_RE, "#{validation_chain}#{match[0]}")
         else
           "#{base_type}#{validation_chain}"
         end
