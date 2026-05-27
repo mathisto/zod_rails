@@ -3,6 +3,8 @@
 module ZodRails
   module Generation
     class SchemaBuilder
+      STRING_TYPES = %i[string text].freeze
+
       attr_reader :inspector, :excluded_columns
 
       def initialize(inspector, excluded_columns: [])
@@ -34,9 +36,34 @@ module ZodRails
       def build_type_string(column, input_schema:)
         if enum_column?(column.name)
           build_enum_type(column, input_schema: input_schema)
+        elsif (values = string_array_inclusion_values(column))
+          build_inclusion_enum_type(column, values, input_schema: input_schema)
         else
           build_regular_type(column, input_schema: input_schema)
         end
+      end
+
+      def string_array_inclusion_values(column)
+        return nil unless STRING_TYPES.include?(column.type)
+
+        inclusion = inspector.validations_for(column.name).find do |v|
+          v.kind == :inclusion &&
+            !v.conditional? &&
+            v.options[:in].is_a?(Array) &&
+            !v.options[:in].empty? &&
+            v.options[:in].all? { |x| x.is_a?(String) }
+        end
+
+        inclusion&.options&.[](:in)
+      end
+
+      def build_inclusion_enum_type(column, values, input_schema:)
+        Mapping::EnumMapper.call(
+          values,
+          nullable: column.nullable,
+          input_schema: input_schema,
+          has_default: column.has_default
+        )
       end
 
       def build_enum_type(column, input_schema:)
