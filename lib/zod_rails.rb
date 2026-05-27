@@ -12,6 +12,7 @@ require_relative "zod_rails/introspection/model_inspector"
 require_relative "zod_rails/generation/schema_builder"
 require_relative "zod_rails/generation/typescript_emitter"
 require_relative "zod_rails/generation/file_writer"
+require_relative "zod_rails/model_resolver"
 require_relative "zod_rails/generator"
 require_relative "zod_rails/railtie" if defined?(Rails::Railtie)
 
