@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const UserSchema = z.object({
   id: z.int(),
-  email: z.string().min(1).regex(/^[\w+\-.]+@[a-z\d-]+\.[a-z]+$/),
+  email: z.string().min(1).regex(/^[\w+\-.]+@[a-z\d-]+\.[a-z]+$/i),
   name: z.string().min(2).max(100),
   age: z.int().gt(0).lt(150).nullable(),
   bio: z.string().nullable(),
@@ -19,7 +19,7 @@ export const UserSchema = z.object({
 export type User = z.infer<typeof UserSchema>;
 
 export const UserInputSchema = z.object({
-  email: z.string().min(1).regex(/^[\w+\-.]+@[a-z\d-]+\.[a-z]+$/),
+  email: z.string().min(1).regex(/^[\w+\-.]+@[a-z\d-]+\.[a-z]+$/i),
   name: z.string().min(2).max(100),
   age: z.int().gt(0).lt(150).nullish(),
   bio: z.string().nullish(),

@@ -72,7 +72,7 @@ module ZodRails
         return "" unless regex
 
         js_pattern = convert_ruby_regex_to_js(regex)
-        ".regex(/#{js_pattern}/)"
+        ".regex(/#{js_pattern}/#{regex_flags_for(regex)})"
       end
 
       def self.map_inclusion(validation)
@@ -86,6 +86,12 @@ module ZodRails
         pattern = regex.source
         pattern = pattern.gsub("\\A", "^")
         pattern.gsub(/\\z/i, "$")
+      end
+
+      def self.regex_flags_for(regex)
+        flags = +""
+        flags << "i" if (regex.options & Regexp::IGNORECASE).positive?
+        flags
       end
 
       def self.collect_constraints(validation, base_type, constraints)
@@ -120,7 +126,7 @@ module ZodRails
         return unless regex
 
         js_pattern = convert_ruby_regex_to_js(regex)
-        constraints[:others] << ".regex(/#{js_pattern}/)"
+        constraints[:others] << ".regex(/#{js_pattern}/#{regex_flags_for(regex)})"
       end
 
       def self.build_chain(constraints)
@@ -170,7 +176,7 @@ module ZodRails
       end
 
       private_class_method :map_presence, :map_length, :map_numericality, :map_format, :map_inclusion,
-                           :convert_ruby_regex_to_js, :collect_constraints, :build_chain,
+                           :convert_ruby_regex_to_js, :regex_flags_for, :collect_constraints, :build_chain,
                            :handle_presence_constraint, :handle_length_constraint, :handle_format_constraint,
                            :handle_inclusion_constraint, :handle_numericality_constraint, :apply_numeric_range
     end
