@@ -11,6 +11,12 @@ module ZodRails
     end
 
     def generate(model_class)
+      result = generate_content(model_class)
+      file_writer.write(filename: result[:filename], content: result[:content])
+      result[:filename]
+    end
+
+    def generate_content(model_class)
       inspector = Introspection::ModelInspector.new(model_class)
       excluded = ZodRails.configuration.excluded_columns
       builder = Generation::SchemaBuilder.new(inspector, excluded_columns: excluded)
@@ -28,14 +34,27 @@ module ZodRails
       content = emitter.emit_combined(response: response_schema, input: input_schema)
       filename = file_writer.output_path_for(inspector.model_name)
 
-      file_writer.write(filename: filename, content: content)
-      filename
+      { filename: filename, content: content }
     end
 
     def generate_all(model_classes)
       files = model_classes.map { |klass| generate(klass) }
       run_post_generate_command
       files
+    end
+
+    def check(model_classes)
+      model_classes.each_with_object([]) do |klass, drift|
+        target = generate_content(klass)
+        full_path = File.join(output_dir, target[:filename])
+        expected = file_writer.preview(filename: target[:filename], content: target[:content])
+
+        if !File.exist?(full_path)
+          drift << { filename: target[:filename], status: :missing }
+        elsif File.read(full_path) != expected
+          drift << { filename: target[:filename], status: :drifted }
+        end
+      end
     end
 
     private

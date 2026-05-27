@@ -157,6 +157,20 @@ RSpec.describe ZodRails::Generation::FileWriter do
     end
   end
 
+  describe "#preview" do
+    let(:content) { "export const ArticleSchema = z.object({});" }
+    let(:filename) { "article.ts" }
+
+    it "returns the content that would be written when the file does not exist" do
+      expect(writer.preview(filename: filename, content: content)).to eq(content)
+    end
+
+    it "does not write to disk" do
+      writer.preview(filename: filename, content: content)
+      expect(File.exist?(File.join(output_dir, filename))).to be false
+    end
+  end
+
   describe "#output_path_for" do
     it "converts model name to snake_case filename" do
       expect(writer.output_path_for("Article")).to eq("article.ts")

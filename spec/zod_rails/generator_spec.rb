@@ -121,4 +121,70 @@ RSpec.describe ZodRails::Generator do
       expect(File.exist?(File.join(output_dir, "article.ts"))).to be true
     end
   end
+
+  describe "#generate_content" do
+    before do
+      allow(model_class).to receive(:name).and_return("Article")
+      allow(model_class).to receive(:columns).and_return([
+                                                           double(:col, name: "id", type: :integer, null: false,
+                                                                        default: 1)
+                                                         ])
+      allow(model_class).to receive(:validators).and_return([])
+      allow(model_class).to receive(:defined_enums).and_return({})
+    end
+
+    it "returns the filename and content without writing to disk" do
+      result = generator.generate_content(model_class)
+      expect(result).to include(:filename, :content)
+      expect(result[:filename]).to eq("article.ts")
+      expect(result[:content]).to include("export const ArticleSchema")
+      expect(File.exist?(File.join(output_dir, "article.ts"))).to be false
+    end
+
+    it "produces the same content that #generate writes" do
+      preview = generator.generate_content(model_class)
+      generator.generate(model_class)
+      written = File.read(File.join(output_dir, preview[:filename]))
+      expect(written).to eq(preview[:content])
+    end
+  end
+
+  describe "#check" do
+    before do
+      allow(model_class).to receive(:name).and_return("Article")
+      allow(model_class).to receive(:columns).and_return([
+                                                           double(:col, name: "id", type: :integer, null: false,
+                                                                        default: 1)
+                                                         ])
+      allow(model_class).to receive(:validators).and_return([])
+      allow(model_class).to receive(:defined_enums).and_return({})
+    end
+
+    it "returns an empty list when generated content matches disk" do
+      generator.generate(model_class)
+      drift = generator.check([model_class])
+      expect(drift).to be_empty
+    end
+
+    it "marks the file as :missing when nothing is on disk" do
+      drift = generator.check([model_class])
+      expect(drift).to contain_exactly(hash_including(filename: "article.ts", status: :missing))
+    end
+
+    it "marks the file as :drifted when disk content does not match" do
+      generator.generate(model_class)
+      File.write(File.join(output_dir, "article.ts"), "// hand-edited, not a real schema")
+      drift = generator.check([model_class])
+      expect(drift).to contain_exactly(hash_including(filename: "article.ts", status: :drifted))
+    end
+
+    it "does not write anything to disk" do
+      mtime_before = nil
+      generator.generate(model_class)
+      mtime_before = File.mtime(File.join(output_dir, "article.ts"))
+      sleep 0.01
+      generator.check([model_class])
+      expect(File.mtime(File.join(output_dir, "article.ts"))).to eq(mtime_before)
+    end
+  end
 end
