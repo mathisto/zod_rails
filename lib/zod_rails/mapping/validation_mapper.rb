@@ -21,7 +21,7 @@ module ZodRails
         when :length then map_length(validation, base_type)
         when :numericality then map_numericality(validation, base_type)
         when :format then map_format(validation, base_type)
-        when :inclusion then map_inclusion(validation)
+        when :inclusion then map_inclusion(validation, base_type)
         else ""
         end
       end
@@ -75,11 +75,31 @@ module ZodRails
         ".regex(/#{js_pattern}/#{regex_flags_for(regex)})"
       end
 
-      def self.map_inclusion(validation)
+      def self.map_inclusion(validation, base_type)
         values = validation.options[:in] || validation.options[:within]
         return "" unless values.is_a?(Array)
 
-        ""
+        build_array_inclusion_suffix(values, base_type) || ""
+      end
+
+      def self.build_array_inclusion_suffix(values, base_type)
+        return nil if values.empty?
+
+        if values.all? { |v| v.is_a?(String) } && STRING_ZOD_TYPES.include?(base_type)
+          quoted = values.map { |v| %("#{escape_quotes(v)}") }.join(", ")
+          ".pipe(z.enum([#{quoted}]))"
+        elsif values.all? { |v| v.is_a?(Numeric) } && NUMERIC_ZOD_TYPES.include?(base_type)
+          if values.length == 1
+            ".pipe(z.literal(#{values.first}))"
+          else
+            literals = values.map { |v| "z.literal(#{v})" }.join(", ")
+            ".pipe(z.union([#{literals}]))"
+          end
+        end
+      end
+
+      def self.escape_quotes(str)
+        str.to_s.gsub('"', '\\"')
       end
 
       def self.convert_ruby_regex_to_js(regex)
@@ -102,7 +122,7 @@ module ZodRails
         when :length then handle_length_constraint(validation, base_type, constraints)
         when :numericality then handle_numericality_constraint(validation, base_type, constraints)
         when :format then handle_format_constraint(validation, base_type, constraints)
-        when :inclusion then handle_inclusion_constraint(validation, constraints)
+        when :inclusion then handle_inclusion_constraint(validation, base_type, constraints)
         end
       end
 
@@ -143,7 +163,7 @@ module ZodRails
         parts.join
       end
 
-      def self.handle_inclusion_constraint(validation, constraints)
+      def self.handle_inclusion_constraint(validation, base_type, constraints)
         values = validation.options[:in] || validation.options[:within]
         return unless values
 
@@ -153,6 +173,9 @@ module ZodRails
             constraints[:min] = [constraints[:min] || 0, values.begin].max
             constraints[:max] = [constraints[:max] || Float::INFINITY, values.end].min
           end
+        when Array
+          suffix = build_array_inclusion_suffix(values, base_type)
+          constraints[:others] << suffix if suffix
         end
       end
 
@@ -176,6 +199,7 @@ module ZodRails
       end
 
       private_class_method :map_presence, :map_length, :map_numericality, :map_format, :map_inclusion,
+                           :build_array_inclusion_suffix, :escape_quotes,
                            :convert_ruby_regex_to_js, :regex_flags_for, :collect_constraints, :build_chain,
                            :handle_presence_constraint, :handle_length_constraint, :handle_format_constraint,
                            :handle_inclusion_constraint, :handle_numericality_constraint, :apply_numeric_range
