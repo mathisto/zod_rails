@@ -142,6 +142,19 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
     end
   end
 
+  describe "#schema_name for namespaced models" do
+    it "collapses :: into a single-identifier CamelCase name" do
+      allow(inspector).to receive(:model_name).and_return("Admin::User")
+      expect(builder.schema_name).to eq("AdminUserSchema")
+      expect(builder.schema_name(input_schema: true)).to eq("AdminUserInputSchema")
+    end
+
+    it "handles multi-level namespaces" do
+      allow(inspector).to receive(:model_name).and_return("Admin::Dashboard::Widget")
+      expect(builder.schema_name).to eq("AdminDashboardWidgetSchema")
+    end
+  end
+
   def column_info(name, type, nullable: false, has_default: false)
     ZodRails::Introspection::ColumnInfo.new(
       name: name, type: type, nullable: nullable, has_default: has_default

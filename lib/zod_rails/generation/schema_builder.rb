@@ -21,7 +21,7 @@ module ZodRails
 
       def schema_name(input_schema: false)
         suffix = input_schema ? "InputSchema" : "Schema"
-        "#{inspector.model_name}#{suffix}"
+        "#{inspector.model_name.gsub('::', '')}#{suffix}"
       end
 
       private
