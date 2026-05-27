@@ -92,6 +92,7 @@ const formData = UserInputSchema.parse(formValues);
 | `input_schema_suffix` | `InputSchema` | Suffix for input schemas (e.g., `UserInputSchema`) |
 | `generate_input_schemas` | `true` | Whether to generate input schemas |
 | `excluded_columns` | `["id", "created_at", "updated_at"]` | Columns to exclude from input schemas |
+| `post_generate_command` | `nil` | Shell command to run after a successful generation (e.g., your formatter) |
 
 ### Full Configuration Example
 
@@ -138,8 +139,19 @@ ZodRails introspects your model validations and maps them to Zod constraints:
 | `numericality: { greater_than_or_equal_to: n }` | `.gte(n)` |
 | `numericality: { less_than: n }` | `.lt(n)` |
 | `numericality: { less_than_or_equal_to: n }` | `.lte(n)` |
-| `format: { with: /regex/ }` | `.regex(/regex/)` |
-| `inclusion: { in: n..m }` | `.min(n).max(m)` |
+| `format: { with: /regex/ }` | `.regex(/regex/)` (preserves `/i` case-insensitivity) |
+| `inclusion: { in: n..m }` (Range) | `.min(n).max(m)` |
+| `inclusion: { in: %w[a b c] }` (Array, string column) | `z.enum(["a", "b", "c"])` as the base type |
+| `inclusion: { in: [1, 5, 10] }` (Array, integer column) | `.pipe(z.union([z.literal(1), z.literal(5), z.literal(10)]))` |
+
+### `inclusion` vs. Rails `enum`
+
+The Rails `enum` macro and a string column with `validates :foo, inclusion: { in: %w[...] }` both end up as `z.enum([...])` in the generated TypeScript:
+
+- `enum :role, { member: 0, admin: 1 }` introspects through ActiveRecord's `defined_enums` and emits `z.enum(["member", "admin"])`.
+- `validates :decision, inclusion: { in: %w[pending approved] }` on a string column is detected by `SchemaBuilder` and produces `z.enum(["pending", "approved"])` as the base type. `presence: true` becomes redundant once the values are restricted, so it's dropped from the chain.
+
+If you mix both (`enum` macro AND a separate `inclusion` validator on the same column), the `enum` macro wins.
 
 ## Generated Output Example
 
@@ -152,6 +164,7 @@ class User < ApplicationRecord
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true, length: { minimum: 2, maximum: 100 }
   validates :age, numericality: { greater_than: 0, less_than: 150 }, allow_nil: true
+  validates :status, inclusion: { in: %w[pending active suspended] }
 end
 ```
 
@@ -165,6 +178,7 @@ export const UserSchema = z.object({
   email: z.string().min(1).regex(/^[^@\s]+@[^@\s]+$/),
   name: z.string().min(2).max(100),
   age: z.int().gt(0).lt(150).nullable(),
+  status: z.enum(["pending", "active", "suspended"]),
   role: z.enum(["member", "admin", "moderator"]),
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime()
@@ -176,6 +190,7 @@ export const UserInputSchema = z.object({
   email: z.string().min(1).regex(/^[^@\s]+@[^@\s]+$/),
   name: z.string().min(2).max(100),
   age: z.int().gt(0).lt(150).nullish(),
+  status: z.enum(["pending", "active", "suspended"]),
   role: z.enum(["member", "admin", "moderator"]).optional()
 });
 
@@ -196,6 +211,60 @@ ZodRails generates two schema variants:
 - Excludes configured columns (defaults: `id`, `created_at`, `updated_at`)
 - Uses `.optional()` for columns with database defaults
 - Uses `.nullish()` for nullable columns (accepts both `null` and `undefined`)
+
+## Preserving Hand-Written Code
+
+The generator overwrites files in `output_dir` on every run. If you want to keep hand-written schemas, types, or imports next to the generated ones, wrap them in sentinel comments — the writer will preserve anything between the markers verbatim across regens.
+
+Two block markers are recognized per file:
+
+```typescript
+import { z } from "zod";
+
+// ZOD_RAILS:CUSTOM:IMPORTS:BEGIN
+import { customValidator } from "./shared";
+// ZOD_RAILS:CUSTOM:IMPORTS:END
+
+export const ArticleSchema = z.object({ /* generated */ });
+
+export type Article = z.infer<typeof ArticleSchema>;
+
+// ZOD_RAILS:CUSTOM:BEGIN
+export const ArticleResponseSchema = z.object({
+  article: ArticleSchema,
+  meta: z.object({ count: z.int() }),
+});
+// ZOD_RAILS:CUSTOM:END
+```
+
+- **Imports block** lives right after the `import { z } from "zod";` line. Use it for any external imports your custom code needs.
+- **Tail block** lives at the end of the file. Use it for additional schemas, response wrappers, helper types, etc.
+
+Both blocks are optional. If you don't add them, the file is overwritten as before. Hand-edits *outside* the markers will still be lost on regen — wrap them, or move them to a separate file.
+
+## Drift Detection in CI
+
+`bin/rails zod_rails:check` regenerates schemas in memory and compares them against the files on disk. Exits 0 if everything is up to date, 1 with a list of out-of-date files otherwise. Wire it into your CI to catch the case where someone updated a model but forgot to regenerate:
+
+```yaml
+- name: Check Zod schemas are up to date
+  run: bin/rails zod_rails:check
+```
+
+For local iteration, `DRY_RUN=1 bin/rails zod_rails:generate` prints the same drift list without writing anything.
+
+## Formatter Integration
+
+If your TypeScript project runs prettier, biome, or a similar formatter with conventions that differ from the gem's output (single quotes, trailing commas, line width…), set `post_generate_command` and the gem will hand off to your formatter after a successful generation:
+
+```ruby
+ZodRails.configure do |config|
+  config.post_generate_command =
+    "bun run prettier --write 'app/javascript/schemas/**/*.ts'"
+end
+```
+
+The command runs with your project's working directory. A nonzero exit raises `ZodRails::Error` so CI catches misconfiguration, and the generated files are still written before the formatter runs.
 
 ## Integrating with Forms
 
@@ -235,10 +304,17 @@ async function fetchUser(id: number): Promise<User> {
 
 ## CI/CD Integration
 
-Add schema generation to your build process to catch type mismatches early:
+Use `zod_rails:check` to catch missed regenerations:
 
 ```yaml
 # .github/workflows/ci.yml
+- name: Check Zod schemas are up to date
+  run: bin/rails zod_rails:check
+```
+
+This works whether or not the generated schemas are committed to the same repo. If they are committed, the older `git diff --exit-code` approach also works:
+
+```yaml
 - name: Generate Zod schemas
   run: bin/rails zod_rails:generate
 
@@ -263,6 +339,22 @@ Ensure validations are defined on the model class, not in concerns that might no
 ### Custom column types
 
 For custom types not in the mapping table, ZodRails falls back to `z.unknown()`. Open an issue if you need support for additional types.
+
+### Misconfigured model names
+
+A typo in `config.models` no longer raises an `uninitialized constant` backtrace. The generator collects every unresolvable name and prints them all in one report:
+
+```
+ZodRails: 2 model(s) in config.models could not be loaded:
+  - Useer
+  - Postt
+
+Check the model names in config/initializers/zod_rails.rb.
+```
+
+### Namespaced models
+
+A model like `Admin::User` writes to `admin/user.ts` and exports `AdminUserSchema` / `AdminUser` (the namespace separator is collapsed for the TypeScript identifier — `::` is not valid in a TS identifier).
 
 ## Releasing
 
