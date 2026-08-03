@@ -4,6 +4,12 @@ All notable changes to ZodRails are documented here.
 
 ## Unreleased
 
+## 0.3.3 - 2026-08-03
+
+### Changed
+
+- Add the `arm64-darwin-25` Bundler platform so development on macOS 26 does not continually modify `Gemfile.lock`.
+
 ## 0.3.2 - 2026-08-03
 
 ### Upgrade Notes
