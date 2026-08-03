@@ -17,13 +17,19 @@ jobs:
         ruby-version: ['3.2', '3.3', '3.4', '3.5']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
-          bundler-cache: true
+          bundler-cache: ${{ matrix.ruby-version != '3.5' }}
+
+      - name: Install Ruby 3.5 preview dependencies
+        if: matrix.ruby-version == '3.5'
+        env:
+          BUNDLE_FORCE_RUBY_PLATFORM: true
+        run: bundle install
 
       - name: Run tests
         run: bundle exec rspec --format documentation
