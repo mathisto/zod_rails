@@ -25,6 +25,11 @@ RSpec.describe ZodRails::Mapping::EnumMapper do
       values = { 'say "hello"' => 0 }
       expect(mapper.call(values)).to eq('z.enum(["say \\"hello\\""])')
     end
+
+    it "escapes JavaScript control characters and backslashes" do
+      values = ["back\\slash", "new\nline", "tab\tvalue"]
+      expect(mapper.call(values)).to eq('z.enum(["back\\\\slash", "new\\nline", "tab\\tvalue"])')
+    end
   end
 
   describe ".call with nullable option" do

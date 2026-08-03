@@ -21,6 +21,12 @@ namespace :zod_rails do
       exit 1
     end
 
+    unless resolution[:invalid].empty?
+      puts "ZodRails: configured constants must be concrete ActiveRecord models:"
+      resolution[:invalid].each { |model| puts "  - #{model}" }
+      exit 1
+    end
+
     models = resolution[:resolved]
 
     if ENV["DRY_RUN"] == "1"
@@ -56,6 +62,12 @@ namespace :zod_rails do
       exit 1
     end
 
+    unless resolution[:invalid].empty?
+      puts "ZodRails: configured constants must be concrete ActiveRecord models:"
+      resolution[:invalid].each { |model| puts "  - #{model}" }
+      exit 1
+    end
+
     drift = generator.check(resolution[:resolved])
 
     if drift.empty?
@@ -87,7 +99,12 @@ namespace :zod_rails do
       exit 1
     end
 
-    filename = generator.generate(resolution[:resolved].first)
+    if resolution[:invalid].any?
+      puts "ZodRails: '#{model_name}' is not a concrete ActiveRecord model."
+      exit 1
+    end
+
+    filename = generator.generate_all(resolution[:resolved]).first
     puts "Generated: #{filename}"
   end
 end

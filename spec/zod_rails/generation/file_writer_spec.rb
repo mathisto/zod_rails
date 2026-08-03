@@ -170,6 +170,22 @@ RSpec.describe ZodRails::Generation::FileWriter do
       writer.preview(filename: filename, content: content)
       expect(File.exist?(File.join(output_dir, filename))).to be false
     end
+
+    it "returns the exact content write would produce with custom blocks" do
+      full_path = File.join(output_dir, filename)
+      existing = <<~TS
+        #{content}
+        // ZOD_RAILS:CUSTOM:BEGIN
+        export const Custom = true;
+        // ZOD_RAILS:CUSTOM:END
+      TS
+      File.write(full_path, existing)
+
+      preview = writer.preview(filename: filename, content: content)
+      writer.write(filename: filename, content: content)
+
+      expect(preview).to eq(File.read(full_path))
+    end
   end
 
   describe "#output_path_for" do

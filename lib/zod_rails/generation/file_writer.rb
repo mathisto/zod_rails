@@ -23,8 +23,9 @@ module ZodRails
         File.write(full_path, final)
       end
 
-      def preview(filename:, content:) # rubocop:disable Lint/UnusedMethodArgument
-        content
+      def preview(filename:, content:)
+        full_path = File.join(output_dir, filename)
+        File.exist?(full_path) ? splice_custom_blocks(content, File.read(full_path)) : content
       end
 
       def output_path_for(model_name)

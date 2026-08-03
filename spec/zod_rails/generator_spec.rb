@@ -76,6 +76,15 @@ RSpec.describe ZodRails::Generator do
       files = generator.generate_all([model_class, user_class])
       expect(files).to contain_exactly("article.ts", "user.ts")
     end
+
+    it "rejects filename collisions before writing" do
+      allow(model_class).to receive(:name).and_return("APIClient")
+      allow(user_class).to receive(:name).and_return("ApiClient")
+
+      expect { generator.generate_all([model_class, user_class]) }
+        .to raise_error(ZodRails::Error, /collision.*api_client\.ts/i)
+      expect(File.exist?(File.join(output_dir, "api_client.ts"))).to be false
+    end
   end
 
   describe "post_generate_command" do
@@ -147,6 +156,43 @@ RSpec.describe ZodRails::Generator do
       written = File.read(File.join(output_dir, preview[:filename]))
       expect(written).to eq(preview[:content])
     end
+
+    it "honors configured suffixes" do
+      ZodRails.configure do |config|
+        config.schema_suffix = "Contract"
+        config.input_schema_suffix = "FormSchema"
+      end
+
+      content = generator.generate_content(model_class)[:content]
+      expect(content).to include("export const ArticleContract")
+      expect(content).to include("export const ArticleFormSchema")
+      expect(content).to include("export type Article =")
+      expect(content).to include("export type ArticleInput =")
+    ensure
+      ZodRails.reset_configuration!
+    end
+
+    it "can omit input schemas" do
+      ZodRails.configure { |config| config.generate_input_schemas = false }
+
+      content = generator.generate_content(model_class)[:content]
+      expect(content).to include("export const ArticleSchema")
+      expect(content).not_to include("ArticleInputSchema")
+      expect(content).not_to include("ArticleInput")
+    ensure
+      ZodRails.reset_configuration!
+    end
+
+    it "rejects duplicate response and input export names" do
+      ZodRails.configure do |config|
+        config.schema_suffix = "Schema"
+        config.input_schema_suffix = "Schema"
+      end
+
+      expect { generator.generate_content(model_class) }.to raise_error(ZodRails::Error, /same export name/)
+    ensure
+      ZodRails.reset_configuration!
+    end
   end
 
   describe "#check" do
@@ -184,6 +230,21 @@ RSpec.describe ZodRails::Generator do
       sleep 0.01
       generator.check([model_class])
       expect(File.mtime(File.join(output_dir, "article.ts"))).to eq(mtime_before)
+    end
+
+    it "does not report preserved custom blocks as drift" do
+      generator.generate(model_class)
+      path = File.join(output_dir, "article.ts")
+      File.write(path, <<~TS)
+        #{File.read(path).rstrip}
+
+        // ZOD_RAILS:CUSTOM:BEGIN
+        export const Custom = true;
+        // ZOD_RAILS:CUSTOM:END
+      TS
+      generator.generate(model_class)
+
+      expect(generator.check([model_class])).to be_empty
     end
   end
 end

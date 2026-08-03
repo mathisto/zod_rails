@@ -1,4 +1,38 @@
 module ZodRails
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  class Error < StandardError
+  end
+
+  def self.logger: () -> Logger
+  def self.logger=: (Logger) -> Logger
+  def self.configuration: () -> Configuration
+  def self.configure: [A] () { (Configuration) -> A } -> A
+  def self.reset_configuration!: () -> Configuration
+
+  class Configuration
+    attr_accessor output_dir: String
+    attr_accessor schema_suffix: String
+    attr_accessor input_schema_suffix: String
+    attr_accessor generate_input_schemas: bool
+    attr_accessor excluded_columns: Array[String]
+    attr_accessor models: Array[String]
+    attr_accessor post_generate_command: String?
+
+    def initialize: () -> void
+  end
+
+  class Generator
+    attr_reader output_dir: String
+
+    def initialize: (output_dir: String) -> void
+    def generate: (singleton(ActiveRecord::Base)) -> String
+    def generate_content: (singleton(ActiveRecord::Base)) -> Hash[Symbol, String]
+    def generate_all: (Array[singleton(ActiveRecord::Base)]) -> Array[String]
+    def check: (Array[singleton(ActiveRecord::Base)]) -> Array[Hash[Symbol, String | Symbol]]
+  end
+
+  module ModelResolver
+    def self.resolve: (Array[String]) -> Hash[Symbol, Array[untyped]]
+  end
 end

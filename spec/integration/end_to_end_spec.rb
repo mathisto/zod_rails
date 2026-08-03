@@ -80,7 +80,7 @@ RSpec.describe "End-to-end generation", type: :integration do
       expect(content).to include("metadata: z.json().nullable()")
       expect(content).to include("uuid: z.uuid()")
       expect(content).to include("born_on: z.iso.date().nullable()")
-      expect(content).to include("created_at: z.iso.datetime()")
+      expect(content).to include("created_at: z.iso.datetime({ offset: true })")
       expect(content).to include("score: z.string().nullable()")
       expect(content).to include("active: z.boolean()")
     end

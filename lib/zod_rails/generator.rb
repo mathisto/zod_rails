@@ -18,27 +18,32 @@ module ZodRails
 
     def generate_content(model_class)
       inspector = Introspection::ModelInspector.new(model_class)
-      excluded = ZodRails.configuration.excluded_columns
-      builder = Generation::SchemaBuilder.new(inspector, excluded_columns: excluded)
+      config = ZodRails.configuration
+      builder = Generation::SchemaBuilder.new(
+        inspector,
+        excluded_columns: config.excluded_columns,
+        schema_suffix: config.schema_suffix,
+        input_schema_suffix: config.input_schema_suffix
+      )
 
       response_schema = {
         name: builder.schema_name,
+        type_name: builder.type_name,
         body: builder.build
       }
-
-      input_schema = {
-        name: builder.schema_name(input_schema: true),
-        body: builder.build(input_schema: true)
-      }
-
-      content = emitter.emit_combined(response: response_schema, input: input_schema)
-      filename = file_writer.output_path_for(inspector.model_name)
-
-      { filename: filename, content: content }
+      content = emit_content(builder, response_schema, generate_input: config.generate_input_schemas)
+      { filename: file_writer.output_path_for(inspector.model_name), content: content }
     end
 
     def generate_all(model_classes)
-      files = model_classes.map { |klass| generate(klass) }
+      targets = model_classes.map { |klass| generate_content(klass) }
+      duplicate = targets.group_by { |target| target[:filename] }.find { |_filename, matches| matches.size > 1 }
+      raise ZodRails::Error, "Output filename collision: #{duplicate.first}" if duplicate
+
+      files = targets.map do |target|
+        file_writer.write(filename: target[:filename], content: target[:content])
+        target[:filename]
+      end
       run_post_generate_command
       files
     end
@@ -58,6 +63,25 @@ module ZodRails
     end
 
     private
+
+    def emit_content(builder, response, generate_input:)
+      unless generate_input
+        return emitter.emit(
+          schema_name: response[:name], schema_body: response[:body], type_name: response[:type_name]
+        )
+      end
+
+      input = {
+        name: builder.schema_name(input_schema: true),
+        type_name: builder.type_name(input_schema: true),
+        body: builder.build(input_schema: true)
+      }
+      if input[:name] == response[:name]
+        raise ZodRails::Error, "Response and input schemas have the same export name: #{input[:name]}"
+      end
+
+      emitter.emit_combined(response: response, input: input)
+    end
 
     def run_post_generate_command
       cmd = ZodRails.configuration.post_generate_command

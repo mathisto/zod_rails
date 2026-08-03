@@ -3,8 +3,8 @@
 module ZodRails
   module Generation
     class TypescriptEmitter
-      def emit(schema_name:, schema_body:)
-        type_name = derive_type_name(schema_name)
+      def emit(schema_name:, schema_body:, type_name: nil)
+        type_name ||= derive_type_name(schema_name)
 
         <<~TYPESCRIPT
           import { z } from "zod";
@@ -16,8 +16,8 @@ module ZodRails
       end
 
       def emit_combined(response:, input:)
-        response_type = derive_type_name(response[:name])
-        input_type = derive_type_name(input[:name])
+        response_type = response[:type_name] || derive_type_name(response[:name])
+        input_type = input[:type_name] || derive_type_name(input[:name])
 
         <<~TYPESCRIPT
           import { z } from "zod";
@@ -35,7 +35,7 @@ module ZodRails
       private
 
       def derive_type_name(schema_name)
-        schema_name.sub(/Schema$/, "").sub(/InputSchema$/, "Input")
+        schema_name.sub(/InputSchema$/, "Input").sub(/Schema$/, "")
       end
     end
   end

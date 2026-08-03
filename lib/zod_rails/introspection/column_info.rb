@@ -18,7 +18,8 @@ module ZodRails
           name: column.name,
           type: column.type,
           nullable: column.null,
-          has_default: !column.default.nil?
+          has_default: !column.default.nil? ||
+            (column.respond_to?(:default_function) && !column.default_function.nil?)
         )
       end
 

@@ -38,8 +38,12 @@ RSpec.describe ZodRails::Mapping::TypeMapper do
       expect(mapper.call(:date)).to eq("z.iso.date()")
     end
 
-    it "maps :datetime to z.iso.datetime()" do
-      expect(mapper.call(:datetime)).to eq("z.iso.datetime()")
+    it "maps :datetime to an ISO datetime that accepts Rails timezone offsets" do
+      expect(mapper.call(:datetime)).to eq("z.iso.datetime({ offset: true })")
+    end
+
+    it "maps :timestamp like :datetime" do
+      expect(mapper.call(:timestamp)).to eq("z.iso.datetime({ offset: true })")
     end
 
     it "maps :time to z.string()" do

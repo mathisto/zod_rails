@@ -82,9 +82,24 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
                                                                               ])
       end
 
-      it "inserts the chain before the nullable suffix" do
+      it "lets unconditional presence override database nullability" do
         schema = builder.build
-        expect(schema).to include("name: z.string().min(1).max(50).nullable()")
+        expect(schema).to include("name: z.string().min(1).max(50).refine(")
+        expect(schema).not_to include(".nullable()")
+      end
+    end
+
+    context "with presence validation that allows blank values" do
+      before do
+        allow(inspector).to receive(:columns).and_return([column_info("name", :string, nullable: true)])
+        allow(inspector).to receive(:validations_for).with("name").and_return([
+                                                                                validation_info(:presence,
+                                                                                                allow_blank: true)
+                                                                              ])
+      end
+
+      it "preserves nullability and skips the no-op presence constraint" do
+        expect(builder.build).to include("name: z.string().nullable()")
       end
     end
 
@@ -100,11 +115,10 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
                                                                                   ])
       end
 
-      it "emits z.enum as the base type, dropping .min(1)/.pipe noise" do
+      it "retains presence semantics before restricting values" do
         schema = builder.build
-        expect(schema).to include('decision: z.enum(["a", "b", "c"])')
-        expect(schema).not_to include(".pipe")
-        expect(schema).not_to include(".min(1)")
+        expect(schema).to include("decision: z.string().min(1).refine(")
+        expect(schema).to include('.pipe(z.enum(["a", "b", "c"]))')
       end
     end
 
@@ -152,9 +166,10 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
                                                                               ])
       end
 
-      it "produces z.string().min(1)" do
+      it "rejects empty and whitespace-only strings" do
         schema = builder.build
         expect(schema).to include("body: z.string().min(1)")
+        expect(schema).to include("value.trim().length > 0")
       end
     end
 
@@ -210,6 +225,38 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
 
     it "generates input schema name" do
       expect(builder.schema_name(input_schema: true)).to eq("ArticleInputSchema")
+    end
+  end
+
+  describe "custom names and property names" do
+    subject(:builder) do
+      described_class.new(inspector, schema_suffix: "Contract", input_schema_suffix: "FormSchema")
+    end
+
+    before do
+      allow(inspector).to receive(:model_name).and_return("Article")
+      allow(inspector).to receive(:columns).and_return([column_info("postal-code", :string)])
+      allow(inspector).to receive(:validations_for).and_return([])
+      allow(inspector).to receive(:enums).and_return({})
+    end
+
+    it "uses configured schema suffixes" do
+      expect(builder.schema_name).to eq("ArticleContract")
+      expect(builder.schema_name(input_schema: true)).to eq("ArticleFormSchema")
+    end
+
+    it "keeps inferred type names stable" do
+      expect(builder.type_name).to eq("Article")
+      expect(builder.type_name(input_schema: true)).to eq("ArticleInput")
+    end
+
+    it "quotes property names that are not TypeScript identifiers" do
+      expect(builder.build).to include('"postal-code": z.string()')
+    end
+
+    it "rejects suffixes that produce invalid TypeScript identifiers" do
+      invalid_builder = described_class.new(inspector, schema_suffix: "-schema")
+      expect { invalid_builder.schema_name }.to raise_error(ZodRails::Error, /Invalid TypeScript/)
     end
   end
 

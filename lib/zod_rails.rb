@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require "logger"
+require "json"
+require "active_record"
 require_relative "zod_rails/version"
 require_relative "zod_rails/configuration"
 require_relative "zod_rails/mapping/type_mapper"
+require_relative "zod_rails/mapping/regexp_mapper"
 require_relative "zod_rails/mapping/validation_mapper"
 require_relative "zod_rails/mapping/enum_mapper"
 require_relative "zod_rails/introspection/column_info"

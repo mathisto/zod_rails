@@ -39,6 +39,17 @@ RSpec.describe ZodRails::Introspection::ColumnInfo do
         expect(column_info.has_default).to be true
       end
     end
+
+    context "with a database expression default" do
+      let(:column) do
+        double(:column, name: "created_at", type: :datetime, null: false, default: nil,
+                        default_function: "CURRENT_TIMESTAMP")
+      end
+
+      it "detects the default" do
+        expect(column_info.has_default).to be true
+      end
+    end
   end
 
   describe "value object behavior" do

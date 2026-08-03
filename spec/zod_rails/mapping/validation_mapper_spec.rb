@@ -16,12 +16,14 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         )
       end
 
-      it "returns .min(1) for strings" do
-        expect(mapper.call(validation, base_type: :string)).to eq(".min(1)")
+      it "rejects empty and whitespace-only strings" do
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.min(1).refine((value) => value.trim().length > 0, { message: "can\'t be blank" })'
+        )
       end
 
-      it "returns .min(1) for text columns" do
-        expect(mapper.call(validation, base_type: :text)).to eq(".min(1)")
+      it "rejects blank text" do
+        expect(mapper.call(validation, base_type: :text)).to include("value.trim().length > 0")
       end
 
       it "returns empty string for non-strings (handled by nullability)" do
@@ -101,12 +103,16 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
     context "with format validation" do
       it "maps regex to .regex()" do
         validation = build_validation(:format, with: /\A[a-z]+\z/)
-        expect(mapper.call(validation, base_type: :string)).to eq(".regex(/^[a-z]+$/)")
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.regex(new RegExp("^[a-z]+(?![\\\\s\\\\S])"))'
+        )
       end
 
       it "converts Ruby anchors to JS anchors" do
         validation = build_validation(:format, with: /\A\d+\z/)
-        expect(mapper.call(validation, base_type: :string)).to eq('.regex(/^\\d+$/)')
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.regex(new RegExp("^\\\\d+(?![\\\\s\\\\S])"))'
+        )
       end
 
       it "returns empty string for non-string types" do
@@ -116,12 +122,38 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
 
       it "preserves the case-insensitive /i flag" do
         validation = build_validation(:format, with: /\A[a-z]+\z/i)
-        expect(mapper.call(validation, base_type: :string)).to eq(".regex(/^[a-z]+$/i)")
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.regex(new RegExp("^[a-z]+(?![\\\\s\\\\S])", "i"))'
+        )
       end
 
       it "omits flags when none are set" do
         validation = build_validation(:format, with: /\A[a-z]+\z/)
-        expect(mapper.call(validation, base_type: :string)).to eq(".regex(/^[a-z]+$/)")
+        expect(mapper.call(validation, base_type: :string)).to eq(
+          '.regex(new RegExp("^[a-z]+(?![\\\\s\\\\S])"))'
+        )
+      end
+
+      it "safely emits patterns containing a slash" do
+        validation = build_validation(:format, with: %r{\Ahttps://example\.com/\z})
+        expect(mapper.call(validation, base_type: :string)).to include('new RegExp("^https://example\\\\.com/')
+      end
+
+      it "maps Ruby multiline mode to JavaScript dot-all mode" do
+        validation = build_validation(:format, with: /a.b/m)
+        expect(mapper.call(validation, base_type: :string)).to end_with(', "s"))')
+      end
+
+      it "skips Ruby extended-mode patterns that JavaScript cannot preserve" do
+        validation = build_validation(:format, with: /a b/x)
+        allow(ZodRails.logger).to receive(:warn)
+
+        expect(mapper.call(validation, base_type: :string)).to eq("")
+      end
+
+      it "preserves Ruby's before-final-newline anchor" do
+        validation = build_validation(:format, with: /line\Z/)
+        expect(mapper.call(validation, base_type: :string)).to include("(?=(?:\\\\n)?(?![\\\\s\\\\S]))")
       end
     end
 
@@ -200,6 +232,14 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
       end
     end
 
+    context "with allow_blank presence validation" do
+      it "does not add a constraint" do
+        validation = build_validation(:presence, allow_blank: true)
+        expect(mapper.call(validation, base_type: :string)).to eq("")
+        expect(mapper.call_all([validation], base_type: :string)).to eq("")
+      end
+    end
+
     context "with unsupported validation" do
       it "returns empty string for uniqueness" do
         validation = build_validation(:uniqueness)
@@ -219,7 +259,8 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         build_validation(:presence),
         build_validation(:length, minimum: 2, maximum: 100)
       ]
-      expect(mapper.call_all(validations, base_type: :string)).to eq(".min(2).max(100)")
+      expect(mapper.call_all(validations, base_type: :string)).to start_with(".min(2).max(100)")
+      expect(mapper.call_all(validations, base_type: :string)).to include("value.trim().length > 0")
     end
 
     it "deduplicates min constraints (presence + length minimum)" do
@@ -227,7 +268,7 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         build_validation(:presence),
         build_validation(:length, minimum: 5)
       ]
-      expect(mapper.call_all(validations, base_type: :string)).to eq(".min(5)")
+      expect(mapper.call_all(validations, base_type: :string)).to start_with(".min(5)")
     end
 
     it "skips numericality for decimal columns" do
@@ -249,7 +290,7 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         build_validation(:presence),
         build_validation(:length, minimum: 10, maximum: 5000)
       ]
-      expect(mapper.call_all(validations, base_type: :text)).to eq(".min(10).max(5000)")
+      expect(mapper.call_all(validations, base_type: :text)).to start_with(".min(10).max(5000)")
     end
 
     it "skips length for non-string types" do
@@ -271,16 +312,36 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
         build_validation(:presence),
         build_validation(:inclusion, in: %w[pending approved])
       ]
-      expect(mapper.call_all(validations, base_type: :string)).to eq(
-        '.min(1).pipe(z.enum(["pending", "approved"]))'
-      )
+      chain = mapper.call_all(validations, base_type: :string)
+      expect(chain).to start_with(".min(1).refine(")
+      expect(chain).to end_with('.pipe(z.enum(["pending", "approved"]))')
     end
 
-    it "still maps Range inclusion to .min/.max (unchanged Range branch)" do
+    it "maps inclusive Range bounds" do
       validations = [
         build_validation(:inclusion, in: 1..5)
       ]
-      expect(mapper.call_all(validations, base_type: :integer)).to eq(".min(1).max(5)")
+      expect(mapper.call_all(validations, base_type: :integer)).to eq(".gte(1).lte(5)")
+    end
+
+    it "preserves negative and exclusive Range bounds" do
+      validations = [build_validation(:inclusion, in: -5...0)]
+      expect(mapper.call_all(validations, base_type: :integer)).to eq(".gte(-5).lt(0)")
+    end
+
+    it "supports beginless and endless numeric ranges" do
+      expect(mapper.call_all([build_validation(:inclusion, in: ..5)], base_type: :integer)).to eq(".lte(5)")
+      expect(mapper.call_all([build_validation(:inclusion, in: 1..)], base_type: :integer)).to eq(".gte(1)")
+    end
+
+    it "does not apply numeric Range methods to string-backed decimals" do
+      validations = [build_validation(:inclusion, in: 1..5)]
+      expect(mapper.call_all(validations, base_type: :decimal)).to eq("")
+    end
+
+    it "skips dynamic numericality values" do
+      validation = build_validation(:numericality, greater_than: ->(_record) { 1 })
+      expect(mapper.call_all([validation], base_type: :integer)).to eq("")
     end
   end
 

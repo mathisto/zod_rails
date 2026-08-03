@@ -5,12 +5,15 @@ module ZodRails
     class SchemaBuilder
       STRING_TYPES = %i[string text].freeze
       NULLABILITY_SUFFIX_RE = /(\.(?:nullable|nullish|optional)\(\))\z/
+      TYPESCRIPT_IDENTIFIER_RE = /\A[$A-Z_a-z][$\w]*\z/
 
-      attr_reader :inspector, :excluded_columns
+      attr_reader :inspector, :excluded_columns, :schema_suffix, :input_schema_suffix
 
-      def initialize(inspector, excluded_columns: [])
+      def initialize(inspector, excluded_columns: [], schema_suffix: "Schema", input_schema_suffix: "InputSchema")
         @inspector = inspector
         @excluded_columns = excluded_columns.map(&:to_s)
+        @schema_suffix = schema_suffix
+        @input_schema_suffix = input_schema_suffix
       end
 
       def build(input_schema: false)
@@ -23,32 +26,42 @@ module ZodRails
       end
 
       def schema_name(input_schema: false)
-        suffix = input_schema ? "InputSchema" : "Schema"
-        "#{inspector.model_name.gsub("::", "")}#{suffix}"
+        suffix = input_schema ? input_schema_suffix : schema_suffix
+        name = "#{inspector.model_name.gsub("::", "")}#{suffix}"
+        return name if name.match?(TYPESCRIPT_IDENTIFIER_RE)
+
+        raise ZodRails::Error, "Invalid TypeScript schema name: #{name.inspect}"
+      end
+
+      def type_name(input_schema: false)
+        name = inspector.model_name.gsub("::", "")
+        input_schema ? "#{name}Input" : name
       end
 
       private
 
       def field_definition(column, input_schema:)
         type_str = build_type_string(column, input_schema: input_schema)
-        "#{column.name}: #{type_str}"
+        key = column.name.match?(TYPESCRIPT_IDENTIFIER_RE) ? column.name : JSON.generate(column.name)
+        "#{key}: #{type_str}"
       end
 
       def build_type_string(column, input_schema:)
+        validations = inspector.validations_for(column.name)
+
         if enum_column?(column.name)
-          build_enum_type(column, input_schema: input_schema)
-        elsif (values = string_array_inclusion_values(column))
-          build_inclusion_enum_type(column, values, input_schema: input_schema)
+          build_enum_type(column, validations, input_schema: input_schema)
+        elsif (inclusion = string_array_inclusion(column, validations))
+          build_inclusion_enum_type(column, inclusion, validations, input_schema: input_schema)
         else
-          build_regular_type(column, input_schema: input_schema)
+          build_regular_type(column, validations, input_schema: input_schema)
         end
       end
 
-      def string_array_inclusion_values(column)
+      def string_array_inclusion(column, validations)
         return nil unless STRING_TYPES.include?(column.type)
 
-        inclusion = inspector.validations_for(column.name).find { |v| string_array_inclusion?(v) }
-        inclusion&.options&.[](:in)
+        validations.find { |validation| string_array_inclusion?(validation) }
       end
 
       def string_array_inclusion?(validation)
@@ -58,30 +71,32 @@ module ZodRails
         values.is_a?(Array) && !values.empty? && values.all? { |x| x.is_a?(String) }
       end
 
-      def build_inclusion_enum_type(column, values, input_schema:)
+      def build_inclusion_enum_type(column, inclusion, validations, input_schema:)
+        remaining = validations.reject { |validation| validation.equal?(inclusion) }
         Mapping::EnumMapper.call(
-          values,
-          nullable: column.nullable,
+          inclusion.options[:in],
+          validation_chain: Mapping::ValidationMapper.call_all(remaining, base_type: :string),
+          nullable: nullable?(column, validations),
           input_schema: input_schema,
           has_default: column.has_default
         )
       end
 
-      def build_enum_type(column, input_schema:)
+      def build_enum_type(column, validations, input_schema:)
         values = inspector.enums[column.name]
         Mapping::EnumMapper.call(
           values,
-          nullable: column.nullable,
+          validation_chain: Mapping::ValidationMapper.call_all(validations, base_type: :string),
+          nullable: nullable?(column, validations),
           input_schema: input_schema,
           has_default: column.has_default
         )
       end
 
-      def build_regular_type(column, input_schema:)
-        validations = inspector.validations_for(column.name)
+      def build_regular_type(column, validations, input_schema:)
         base_type = Mapping::TypeMapper.call(
           column.type,
-          nullable: column.nullable,
+          nullable: nullable?(column, validations),
           input_schema: input_schema,
           has_default: column.has_default
         )
@@ -102,6 +117,13 @@ module ZodRails
 
       def enum_column?(column_name)
         inspector.enums.key?(column_name)
+      end
+
+      def nullable?(column, validations)
+        column.nullable && validations.none? do |validation|
+          validation.kind == :presence && !validation.conditional? &&
+            !validation.options[:allow_nil] && !validation.options[:allow_blank]
+        end
       end
 
       def filtered_columns
