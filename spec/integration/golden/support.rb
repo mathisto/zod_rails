@@ -2,7 +2,9 @@
 
 module ZodRails
   module GoldenSupport
-    Column = Struct.new(:name, :type, :null, :default, keyword_init: true)
+    Column = Struct.new(:name, :type, :null, :default, :array, keyword_init: true) do
+      def array? = !!array
+    end
 
     Validator = Struct.new(:kind, :attributes, :options, keyword_init: true)
 
@@ -24,7 +26,8 @@ module ZodRails
         name: spec.fetch(:name),
         type: spec.fetch(:type),
         null: spec.fetch(:null, true),
-        default: spec[:default]
+        default: spec[:default],
+        array: spec.fetch(:array, false)
       )
     end
 

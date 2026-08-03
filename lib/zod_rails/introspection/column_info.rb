@@ -3,13 +3,14 @@
 module ZodRails
   module Introspection
     class ColumnInfo
-      attr_reader :name, :type, :nullable, :has_default
+      attr_reader :name, :type, :nullable, :has_default, :array
 
-      def initialize(name:, type:, nullable:, has_default:)
+      def initialize(name:, type:, nullable:, has_default:, array: false)
         @name = name
         @type = type
         @nullable = nullable
         @has_default = has_default
+        @array = array
         freeze
       end
 
@@ -19,7 +20,8 @@ module ZodRails
           type: column.type,
           nullable: column.null,
           has_default: !column.default.nil? ||
-            (column.respond_to?(:default_function) && !column.default_function.nil?)
+            (column.respond_to?(:default_function) && !column.default_function.nil?),
+          array: column.respond_to?(:array?) && column.array?
         )
       end
 
@@ -28,12 +30,13 @@ module ZodRails
           name == other.name &&
           type == other.type &&
           nullable == other.nullable &&
-          has_default == other.has_default
+          has_default == other.has_default &&
+          array == other.array
       end
       alias eql? ==
 
       def hash
-        [self.class, name, type, nullable, has_default].hash
+        [self.class, name, type, nullable, has_default, array].hash
       end
     end
   end

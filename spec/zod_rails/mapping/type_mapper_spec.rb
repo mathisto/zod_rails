@@ -18,8 +18,8 @@ RSpec.describe ZodRails::Mapping::TypeMapper do
       expect(mapper.call(:integer)).to eq("z.int()")
     end
 
-    it "maps :bigint to z.string() to avoid JS overflow" do
-      expect(mapper.call(:bigint)).to eq("z.string()")
+    it "maps :bigint to the numeric shape Rails serializes" do
+      expect(mapper.call(:bigint)).to eq("z.int()")
     end
 
     it "maps :float to z.number()" do
@@ -46,8 +46,8 @@ RSpec.describe ZodRails::Mapping::TypeMapper do
       expect(mapper.call(:timestamp)).to eq("z.iso.datetime({ offset: true })")
     end
 
-    it "maps :time to z.string()" do
-      expect(mapper.call(:time)).to eq("z.string()")
+    it "maps :time to Rails' dummy-date ISO datetime representation" do
+      expect(mapper.call(:time)).to eq("z.iso.datetime({ offset: true })")
     end
 
     it "maps :json to z.json()" do
@@ -73,6 +73,27 @@ RSpec.describe ZodRails::Mapping::TypeMapper do
     it "logs a warning for unrecognized types" do
       expect(ZodRails.logger).to receive(:warn).with(/foobar/)
       mapper.call(:foobar)
+    end
+  end
+
+  describe ".call with array option" do
+    it "wraps the element schema" do
+      expect(mapper.call(:string, array: true)).to eq("z.array(z.string())")
+    end
+
+    it "applies response nullability outside the array" do
+      expect(mapper.call(:string, array: true, nullable: true)).to eq("z.array(z.string()).nullable()")
+    end
+
+    it "applies input optionality outside the array" do
+      expect(mapper.call(:string, array: true, has_default: true, input_schema: true))
+        .to eq("z.array(z.string()).optional()")
+    end
+
+    it "applies element validations inside the array" do
+      expect(mapper.call(:string, array: true, element_validation_chain: '.pipe(z.enum(["a", "b"]))')).to eq(
+        'z.array(z.string().pipe(z.enum(["a", "b"])))'
+      )
     end
   end
 

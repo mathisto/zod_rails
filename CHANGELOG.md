@@ -4,6 +4,24 @@ All notable changes to ZodRails are documented here.
 
 ## Unreleased
 
+## 0.3.1 - 2026-08-03
+
+### Upgrade Notes
+
+- Regenerate committed schemas after upgrading if your models contain PostgreSQL arrays, adapter-reported `:bigint`
+  columns, or `time` columns. Their generated wire schemas now match Rails payload shapes more closely.
+
+### Fixed
+
+- Generate `z.array(...)` schemas for PostgreSQL array columns, with inclusion constraints on elements and
+  presence, length, default, and nullability constraints on the outer array.
+- Map adapter-reported `:bigint` columns to the JSON number shape emitted by Rails.
+- Validate Rails `time` payloads as ISO datetimes with timezone-offset support.
+
+### Changed
+
+- Run a generated-schema runtime contract against the pinned Zod version in CI.
+
 ## 0.3.0 - 2026-08-03
 
 ### Upgrade Notes

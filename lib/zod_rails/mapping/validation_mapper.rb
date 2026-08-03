@@ -13,35 +13,37 @@ module ZodRails
       NUMERIC_ZOD_TYPES = %i[integer float].freeze
       STRING_ZOD_TYPES = %i[string text].freeze
 
-      def self.call(validation, base_type:)
+      def self.call(validation, base_type:, array: false)
         return "" if validation.conditional? || no_op_presence?(validation)
 
         case validation.kind
-        when :presence then map_presence(validation, base_type)
-        when :length then map_length(validation, base_type)
-        when :numericality then map_numericality(validation, base_type)
-        when :format then map_format(validation, base_type)
-        when :inclusion then map_inclusion(validation, base_type)
+        when :presence then map_presence(validation, base_type, array)
+        when :length then map_length(validation, base_type, array)
+        when :numericality then map_numericality(validation, base_type, array)
+        when :format then map_format(validation, base_type, array)
+        when :inclusion then map_inclusion(validation, base_type, array)
         else ""
         end
       end
 
-      def self.call_all(validations, base_type:)
+      def self.call_all(validations, base_type:, array: false)
         constraints = { min: nil, max: nil, length: nil, others: [] }
 
         validations.each do |v|
-          collect_constraints(v, base_type, constraints)
+          collect_constraints(v, base_type, constraints, array)
         end
 
         build_chain(constraints)
       end
 
-      def self.map_presence(_validation, base_type)
+      def self.map_presence(_validation, base_type, array)
+        return ".min(1)" if array
+
         STRING_ZOD_TYPES.include?(base_type) ? ".min(1)#{presence_suffix}" : ""
       end
 
-      def self.map_length(validation, base_type)
-        return "" unless STRING_ZOD_TYPES.include?(base_type)
+      def self.map_length(validation, base_type, array)
+        return "" unless array || STRING_ZOD_TYPES.include?(base_type)
 
         parts = []
         opts = validation.options
@@ -56,8 +58,8 @@ module ZodRails
         parts.join
       end
 
-      def self.map_numericality(validation, base_type)
-        return "" unless NUMERIC_ZOD_TYPES.include?(base_type)
+      def self.map_numericality(validation, base_type, array)
+        return "" if array || !NUMERIC_ZOD_TYPES.include?(base_type)
 
         validation.options.filter_map do |key, value|
           method = NUMERICALITY_MAP[key]
@@ -65,8 +67,8 @@ module ZodRails
         end.join
       end
 
-      def self.map_format(validation, base_type)
-        return "" unless STRING_ZOD_TYPES.include?(base_type)
+      def self.map_format(validation, base_type, array)
+        return "" if array || !STRING_ZOD_TYPES.include?(base_type)
 
         regex = validation.options[:with]
         return "" unless regex
@@ -74,7 +76,9 @@ module ZodRails
         RegexpMapper.call(regex)&.then { |expression| ".regex(#{expression})" } || ""
       end
 
-      def self.map_inclusion(validation, base_type)
+      def self.map_inclusion(validation, base_type, array)
+        return "" if array
+
         values = validation.options[:in] || validation.options[:within]
         return "" unless values.is_a?(Array)
 
@@ -112,27 +116,35 @@ module ZodRails
         ".pipe(z.union([#{literals}]))"
       end
 
-      def self.collect_constraints(validation, base_type, constraints)
+      def self.collect_constraints(validation, base_type, constraints, array)
         return if validation.conditional? || no_op_presence?(validation)
+        return collect_array_constraints(validation, base_type, constraints) if array
 
         case validation.kind
-        when :presence then handle_presence_constraint(base_type, constraints)
-        when :length then handle_length_constraint(validation, base_type, constraints)
+        when :presence then handle_presence_constraint(base_type, constraints, false)
+        when :length then handle_length_constraint(validation, base_type, constraints, false)
         when :numericality then handle_numericality_constraint(validation, base_type, constraints)
         when :format then handle_format_constraint(validation, base_type, constraints)
         when :inclusion then handle_inclusion_constraint(validation, base_type, constraints)
         end
       end
 
-      def self.handle_presence_constraint(base_type, constraints)
-        return unless STRING_ZOD_TYPES.include?(base_type)
-
-        constraints[:min] = [constraints[:min] || 0, 1].max
-        constraints[:others] << presence_suffix
+      def self.collect_array_constraints(validation, base_type, constraints)
+        case validation.kind
+        when :presence then handle_presence_constraint(base_type, constraints, true)
+        when :length then handle_length_constraint(validation, base_type, constraints, true)
+        end
       end
 
-      def self.handle_length_constraint(validation, base_type, constraints)
-        return unless STRING_ZOD_TYPES.include?(base_type)
+      def self.handle_presence_constraint(base_type, constraints, array)
+        return unless array || STRING_ZOD_TYPES.include?(base_type)
+
+        constraints[:min] = [constraints[:min] || 0, 1].max
+        constraints[:others] << presence_suffix unless array
+      end
+
+      def self.handle_length_constraint(validation, base_type, constraints, array)
+        return unless array || STRING_ZOD_TYPES.include?(base_type)
 
         opts = validation.options
         constraints[:length] = opts[:is] if opts[:is]
@@ -213,14 +225,13 @@ module ZodRails
         value.is_a?(Numeric) && (!value.respond_to?(:finite?) || value.finite?)
       end
 
-      def self.no_op_presence?(validation)
-        validation.kind == :presence && validation.options[:allow_blank]
-      end
+      def self.no_op_presence?(validation) = validation.kind == :presence && validation.options[:allow_blank]
 
       private_class_method :map_presence, :map_length, :map_numericality, :map_format, :map_inclusion,
                            :build_array_inclusion_suffix, :string_array_for_string_type?,
                            :numeric_array_for_numeric_type?, :build_string_enum_suffix,
-                           :build_numeric_literal_suffix, :collect_constraints, :build_chain,
+                           :build_numeric_literal_suffix, :collect_constraints, :collect_array_constraints,
+                           :build_chain,
                            :handle_presence_constraint, :handle_length_constraint, :handle_format_constraint,
                            :handle_inclusion_constraint, :apply_range_inclusion, :apply_array_inclusion,
                            :handle_numericality_constraint, :apply_numeric_range, :presence_suffix, :static_number?,

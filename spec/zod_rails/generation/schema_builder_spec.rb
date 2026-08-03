@@ -190,6 +190,60 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
       end
     end
 
+    context "with PostgreSQL array columns" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("tags", :string, array: true,
+                                                                                        has_default: true),
+                                                           column_info("aliases", :string, array: true,
+                                                                                           nullable: true)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("tags").and_return([
+                                                                                validation_info(:presence),
+                                                                                validation_info(:length, maximum: 5),
+                                                                                validation_info(:inclusion,
+                                                                                                in: %w[alpha beta])
+                                                                              ])
+        allow(inspector).to receive(:validations_for).with("aliases").and_return([])
+      end
+
+      it "wraps element schemas and applies constraints to the outer array" do
+        schema = builder.build
+        expect(schema).to include(
+          'tags: z.array(z.string().pipe(z.enum(["alpha", "beta"]))).min(1).max(5)'
+        )
+        expect(schema).to include("aliases: z.array(z.string()).nullable()")
+      end
+
+      it "makes defaulted arrays optional only in input schemas" do
+        schema = builder.build(input_schema: true)
+        expect(schema).to include(
+          'tags: z.array(z.string().pipe(z.enum(["alpha", "beta"]))).min(1).max(5).optional()'
+        )
+      end
+    end
+
+    context "with an array-backed enum and a narrower inclusion validation" do
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("states", :string, array: true)
+                                                         ])
+        allow(inspector).to receive(:enums).and_return(
+          "states" => { "draft" => 0, "published" => 1 }
+        )
+        allow(inspector).to receive(:validations_for).with("states").and_return([
+                                                                                  validation_info(:inclusion,
+                                                                                                  in: ["draft"])
+                                                                                ])
+      end
+
+      it "applies the inclusion validation to each enum element" do
+        expect(builder.build).to include(
+          'states: z.array(z.string().pipe(z.enum(["draft"])).pipe(z.enum(["draft", "published"])))'
+        )
+      end
+    end
+
     context "with input_schema: true" do
       before do
         allow(inspector).to receive(:columns).and_return([
@@ -273,9 +327,9 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
     end
   end
 
-  def column_info(name, type, nullable: false, has_default: false)
+  def column_info(name, type, nullable: false, has_default: false, array: false)
     ZodRails::Introspection::ColumnInfo.new(
-      name: name, type: type, nullable: nullable, has_default: has_default
+      name: name, type: type, nullable: nullable, has_default: has_default, array: array
     )
   end
 

@@ -39,3 +39,25 @@ jobs:
 
       - name: Validate RBS signatures
         run: bundle exec rbs validate
+
+  runtime-contract:
+    name: Generated schema runtime contract
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Zod
+        run: bun install --frozen-lockfile
+
+      - name: Parse a Rails payload with a generated schema
+        run: bun run test:contracts

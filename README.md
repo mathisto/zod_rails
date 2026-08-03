@@ -112,18 +112,23 @@ end
 | Rails/DB Type | Zod Type |
 |---------------|----------|
 | `string`, `text` | `z.string()` |
-| `integer` | `z.int()` |
+| `integer`, `bigint` | `z.int()` |
 | `float` | `z.number()` |
-| `bigint` | `z.string()` (avoids JS `Number` overflow) |
 | `decimal` | `z.string()` (preserves `BigDecimal` precision) |
 | `boolean` | `z.boolean()` |
 | `date` | `z.iso.date()` |
 | `datetime`, `timestamp` | `z.iso.datetime({ offset: true })` |
 | `json`, `jsonb` | `z.json()` |
 | `uuid` | `z.uuid()` |
-| `time` | `z.string()` |
+| `time` | `z.iso.datetime({ offset: true })` |
 | `binary` | `z.string()` |
 | `enum` | `z.enum([...])` |
+
+PostgreSQL array columns wrap the element mapping with `z.array(...)`. Nullability and input optionality apply to the
+array itself, so a nullable `string[]` becomes `z.array(z.string()).nullable()`, while a non-null array with a database
+default becomes `z.array(z.string())` in the response schema and `z.array(z.string()).optional()` in the input schema.
+Rails inclusion validators on array attributes constrain each element, so `inclusion: { in: %w[a b] }` produces an
+element enum inside the array.
 
 ## Validation Mappings
 
@@ -346,7 +351,15 @@ For custom types not in the mapping table, ZodRails falls back to `z.unknown()`.
 
 ZodRails generates a useful static approximation of database columns and unconditional model validations. It cannot reproduce validations that require database access, another attribute, or runtime model state. Conditional and context-specific validations, dynamic numericality values, uniqueness, and unsupported Ruby regular-expression modes are skipped.
 
-The generated wire types must match your serializers. In particular, `bigint` and `decimal` map to strings to avoid JavaScript precision loss; configure your API serializer to emit strings for those attributes. Review generated schemas when using adapter-specific or custom ActiveRecord types.
+The generated wire types must match your serializers. Rails emits integer and bigint attributes as JSON numbers, so
+ZodRails maps both to `z.int()`. Zod intentionally rejects integers outside JavaScript's safe integer range; serialize
+large identifiers as strings and provide an application-owned schema when values can exceed that range. Decimal values
+map to strings to preserve `BigDecimal` precision. Review generated schemas when using custom serializers,
+adapter-specific types, or custom ActiveRecord types.
+
+PostgreSQL permits null elements and multidimensional values without exposing either constraint through ordinary
+column metadata. ZodRails currently generates one-dimensional arrays with non-null elements. Use an application-owned
+schema when a column intentionally stores null elements or nested arrays.
 
 ### Misconfigured model names
 
@@ -380,7 +393,12 @@ After checking out the repo:
 ```bash
 bundle install
 bundle exec rspec
+bun install --frozen-lockfile
+bun run test:contracts
 ```
+
+The Bun contract test generates a TypeScript schema and parses representative Rails payload values with the pinned Zod
+version. This complements the Ruby unit and golden tests by exercising the generated code at runtime.
 
 ## Contributing
 

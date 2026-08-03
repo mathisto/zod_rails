@@ -26,6 +26,10 @@ RSpec.describe ZodRails::Introspection::ColumnInfo do
       expect(column_info.has_default).to be false
     end
 
+    it "defaults to a scalar for adapters without array metadata" do
+      expect(column_info.array).to be false
+    end
+
     context "with a nullable column with default" do
       let(:column) do
         double(:column, name: "status", type: :string, null: true, default: "pending")
@@ -50,6 +54,16 @@ RSpec.describe ZodRails::Introspection::ColumnInfo do
         expect(column_info.has_default).to be true
       end
     end
+
+    context "with a PostgreSQL array column" do
+      let(:column) do
+        double(:column, name: "tags", type: :string, null: false, default: [], array?: true)
+      end
+
+      it "captures the array metadata" do
+        expect(column_info.array).to be true
+      end
+    end
   end
 
   describe "value object behavior" do
@@ -69,6 +83,13 @@ RSpec.describe ZodRails::Introspection::ColumnInfo do
     it "supports hash-based comparison" do
       other = described_class.new(name: "id", type: :integer, nullable: false, has_default: true)
       expect(column_info.hash).to eq(other.hash)
+    end
+
+    it "includes array metadata in equality" do
+      array_column = described_class.new(
+        name: "id", type: :integer, nullable: false, has_default: true, array: true
+      )
+      expect(column_info).not_to eq(array_column)
     end
   end
 end

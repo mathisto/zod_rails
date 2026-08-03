@@ -59,7 +59,7 @@ module ZodRails
       end
 
       def string_array_inclusion(column, validations)
-        return nil unless STRING_TYPES.include?(column.type)
+        return nil if column.array || !STRING_TYPES.include?(column.type)
 
         validations.find { |validation| string_array_inclusion?(validation) }
       end
@@ -75,10 +75,11 @@ module ZodRails
         remaining = validations.reject { |validation| validation.equal?(inclusion) }
         Mapping::EnumMapper.call(
           inclusion.options[:in],
-          validation_chain: Mapping::ValidationMapper.call_all(remaining, base_type: :string),
+          validation_chain: Mapping::ValidationMapper.call_all(remaining, base_type: :string, array: column.array),
           nullable: nullable?(column, validations),
           input_schema: input_schema,
-          has_default: column.has_default
+          has_default: column.has_default,
+          array: column.array
         )
       end
 
@@ -86,10 +87,12 @@ module ZodRails
         values = inspector.enums[column.name]
         Mapping::EnumMapper.call(
           values,
-          validation_chain: Mapping::ValidationMapper.call_all(validations, base_type: :string),
+          validation_chain: Mapping::ValidationMapper.call_all(validations, base_type: :string, array: column.array),
           nullable: nullable?(column, validations),
           input_schema: input_schema,
-          has_default: column.has_default
+          has_default: column.has_default,
+          array: column.array,
+          element_validation_chain: array_element_validation_chain(column, validations)
         )
       end
 
@@ -98,10 +101,12 @@ module ZodRails
           column.type,
           nullable: nullable?(column, validations),
           input_schema: input_schema,
-          has_default: column.has_default
+          has_default: column.has_default,
+          array: column.array,
+          element_validation_chain: array_element_validation_chain(column, validations)
         )
 
-        validation_chain = Mapping::ValidationMapper.call_all(validations, base_type: column.type)
+        validation_chain = Mapping::ValidationMapper.call_all(validations, base_type: column.type, array: column.array)
         insert_validation_chain(base_type, validation_chain)
       end
 
@@ -124,6 +129,13 @@ module ZodRails
           validation.kind == :presence && !validation.conditional? &&
             !validation.options[:allow_nil] && !validation.options[:allow_blank]
         end
+      end
+
+      def array_element_validation_chain(column, validations)
+        return "" unless column.array
+
+        element_validations = validations.select { |validation| validation.kind == :inclusion }
+        Mapping::ValidationMapper.call_all(element_validations, base_type: column.type)
       end
 
       def filtered_columns

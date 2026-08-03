@@ -39,6 +39,31 @@ RSpec.describe ZodRails::Mapping::EnumMapper do
     end
   end
 
+  describe ".call with array option" do
+    it "wraps the enum as the array element schema" do
+      expect(mapper.call(%w[draft published], array: true)).to eq(
+        'z.array(z.enum(["draft", "published"]))'
+      )
+    end
+
+    it "keeps array validations and nullability outside the array" do
+      expect(mapper.call(%w[draft published], array: true, validation_chain: ".min(1)", nullable: true)).to eq(
+        'z.array(z.enum(["draft", "published"])).min(1).nullable()'
+      )
+    end
+
+    it "applies additional element constraints inside the array" do
+      schema = mapper.call(
+        %w[draft published],
+        array: true,
+        element_validation_chain: '.pipe(z.enum(["draft"]))'
+      )
+      expect(schema).to eq(
+        'z.array(z.string().pipe(z.enum(["draft"])).pipe(z.enum(["draft", "published"])))'
+      )
+    end
+  end
+
   describe ".call with input_schema option" do
     it "uses .nullish() for nullable input schemas" do
       values = { "draft" => 0, "published" => 1 }

@@ -343,6 +343,19 @@ RSpec.describe ZodRails::Mapping::ValidationMapper do
       validation = build_validation(:numericality, greater_than: ->(_record) { 1 })
       expect(mapper.call_all([validation], base_type: :integer)).to eq("")
     end
+
+    it "maps presence and length as array-level constraints" do
+      validations = [build_validation(:presence), build_validation(:length, maximum: 5)]
+      expect(mapper.call_all(validations, base_type: :string, array: true)).to eq(".min(1).max(5)")
+    end
+
+    it "does not apply scalar format and inclusion constraints to arrays" do
+      validations = [
+        build_validation(:format, with: /foo/),
+        build_validation(:inclusion, in: %w[foo bar])
+      ]
+      expect(mapper.call_all(validations, base_type: :string, array: true)).to eq("")
+    end
   end
 
   def build_validation(kind, **options)
