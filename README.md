@@ -45,6 +45,9 @@ Add to your Gemfile:
 gem "zod_rails"
 ```
 
+Use `0.3.2` or newer. Versions `0.3.0` and `0.3.1` omitted the Railtie's Rake task file from the published gem and can
+break Rails task loading.
+
 Then run:
 
 ```bash

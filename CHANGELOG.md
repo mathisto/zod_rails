@@ -4,6 +4,19 @@ All notable changes to ZodRails are documented here.
 
 ## Unreleased
 
+## 0.3.2 - 2026-08-03
+
+### Upgrade Notes
+
+- Upgrade from `0.3.0` or `0.3.1` immediately. Those releases omitted the Railtie's Rake task file from the packaged
+  gem, causing `Rails.application.load_tasks` and unrelated Rails tasks such as `db:migrate` and `assets:precompile`
+  to fail with `LoadError`.
+
+### Fixed
+
+- Include `lib/tasks/zod_rails.rake` in the published gem.
+- Verify the runtime manifest and task loading in the test suite.
+
 ## 0.3.1 - 2026-08-03
 
 ### Upgrade Notes
