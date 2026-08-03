@@ -61,11 +61,61 @@ RSpec.describe "generated Zod runtime contract" do
     end
   end
 
-  def column_info(name, type, array: false, has_default: false)
+  # A format validation on a nullable column is the combination that used to lose
+  # a level of backslash escaping on its way into `new RegExp("...")`. The damage
+  # changes what the pattern matches: `^[a-z\\d]+(?![\\s\\S])` degrades to
+  # `^[a-zd]+(?![sS])`, whose end anchor no longer anchors, so `.regex()` starts
+  # accepting any string with a valid *prefix*. "abc def" is the discriminator --
+  # it must be rejected, and the corrupted pattern accepts it.
+  it "enforces a format regex with its escaping intact" do
+    columns = [column_info("slug", :string, nullable: true)]
+    inspector = instance_double(
+      ZodRails::Introspection::ModelInspector,
+      model_name: "RuntimeSlug",
+      columns: columns,
+      enums: {}
+    )
+    allow(inspector).to receive(:validations_for).and_return([])
+    format = ZodRails::Introspection::ValidationInfo.new(
+      kind: :format,
+      attribute: :slug,
+      options: { with: /\A[a-z\d]+\z/ },
+      conditional: false
+    )
+    allow(inspector).to receive(:validations_for).with("slug").and_return([format])
+
+    builder = ZodRails::Generation::SchemaBuilder.new(inspector)
+    schema = ZodRails::Generation::TypescriptEmitter.new.emit(
+      schema_name: builder.schema_name,
+      schema_body: builder.build,
+      type_name: builder.type_name
+    )
+
+    Dir.mktmpdir("zod-rails-runtime-", Dir.pwd) do |directory|
+      schema_path = File.join(directory, "runtime_slug.ts")
+      File.write(schema_path, schema)
+      script = <<~TS
+        import { RuntimeSlugSchema } from #{JSON.generate(schema_path)};
+        RuntimeSlugSchema.parse({ slug: "user1" });
+        RuntimeSlugSchema.parse({ slug: null });
+        for (const invalid of ["abc def", "abc!!!", "Not A Slug"]) {
+          if (RuntimeSlugSchema.safeParse({ slug: invalid }).success) {
+            throw new Error(`format regex was not enforced for ${invalid}`);
+          }
+        }
+      TS
+      _stdout, stderr, status = Open3.capture3("bun", "-e", script, chdir: Dir.pwd)
+
+      expect(stderr).to eq("")
+      expect(status).to be_success
+    end
+  end
+
+  def column_info(name, type, array: false, has_default: false, nullable: false)
     ZodRails::Introspection::ColumnInfo.new(
       name: name,
       type: type,
-      nullable: false,
+      nullable: nullable,
       has_default: has_default,
       array: array
     )

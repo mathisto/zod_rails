@@ -140,6 +140,22 @@ RSpec.describe ZodRails::Generation::FileWriter do
       expect(result.strip).to end_with("// ZOD_RAILS:CUSTOM:END")
     end
 
+    # Regression: the preserved block was interpolated into a `sub` replacement
+    # string, so any backslash the author wrote was expanded on regeneration.
+    it "preserves backslashes inside a custom imports block" do
+      escaped_block = <<~'BLOCK'
+        // ZOD_RAILS:CUSTOM:IMPORTS:BEGIN
+        export const SLUG_RE = new RegExp("^[a-z\\d]+(?:-[a-z\\d]+)*$");
+        // ZOD_RAILS:CUSTOM:IMPORTS:END
+      BLOCK
+
+      File.write(full_path, "#{generated.lines.first}\n#{escaped_block}#{generated.lines[1..].join}")
+
+      writer.write(filename: filename, content: generated)
+
+      expect(File.read(full_path)).to include('new RegExp("^[a-z\\\\d]+(?:-[a-z\\\\d]+)*$")')
+    end
+
     it "places the imports block right after the zod import" do
       with_imports = generated.sub(
         /^(import \{ z \} from "zod";\n)/,

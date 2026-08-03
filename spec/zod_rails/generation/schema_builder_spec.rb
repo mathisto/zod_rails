@@ -53,6 +53,43 @@ RSpec.describe ZodRails::Generation::SchemaBuilder do
       end
     end
 
+    # Regression: the chain used to be spliced in through a `sub` replacement
+    # string, which expanded its backslash sequences — `\\.` collapsed to `\.`
+    # (any character) and `\\s` to `\s` (a literal "s"), silently rewriting the
+    # pattern. Only columns carrying a nullability suffix took that branch, so
+    # input schemas were corrupted far more often than response schemas.
+    context "with a format validation on a nullable column" do
+      let(:email_format) { /\A[^@\s]+@[^@\s]+\.[A-Za-z]{2,}\z/ }
+
+      let(:regex_chain) do
+        <<~'CHAIN'.chomp
+          .regex(new RegExp("^[^@\\s]+@[^@\\s]+\\.[A-Za-z]{2,}(?![\\s\\S])"))
+        CHAIN
+      end
+
+      before do
+        allow(inspector).to receive(:columns).and_return([
+                                                           column_info("email", :string, nullable: true)
+                                                         ])
+        allow(inspector).to receive(:validations_for).with("email").and_return([
+                                                                                 validation_info(:format,
+                                                                                                 with: email_format)
+                                                                               ])
+      end
+
+      it "keeps regex escaping intact in the response schema" do
+        expect(builder.build).to include("email: z.string()#{regex_chain}.nullable()")
+      end
+
+      it "keeps regex escaping intact in the input schema" do
+        expect(builder.build(input_schema: true)).to include("email: z.string()#{regex_chain}.nullish()")
+      end
+
+      it "emits the same expression the regexp mapper produced" do
+        expect(builder.build(input_schema: true)).to include(ZodRails::Mapping::RegexpMapper.call(email_format))
+      end
+    end
+
     context "with enums" do
       before do
         allow(inspector).to receive(:columns).and_return([

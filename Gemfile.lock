@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    zod_rails (0.3.3)
+    zod_rails (0.3.4)
       activerecord (>= 7.0, < 9)
       logger (~> 1.6)
       railties (>= 7.0, < 9)
