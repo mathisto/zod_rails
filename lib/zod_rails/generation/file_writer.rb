@@ -48,8 +48,14 @@ module ZodRails
         result
       end
 
+      # Concatenate rather than interpolating the preserved block into a `sub`
+      # replacement string, which would expand any backslash sequence the author
+      # wrote inside their custom imports.
       def insert_imports_block(content, imports_block)
-        content.sub(ZOD_IMPORT_RE, "\\1\n#{imports_block}")
+        match = content.match(ZOD_IMPORT_RE)
+        return content unless match
+
+        "#{match.pre_match}#{match[0]}\n#{imports_block}#{match.post_match}"
       end
 
       def append_tail_block(content, tail_block)

@@ -4,6 +4,25 @@ All notable changes to ZodRails are documented here.
 
 ## Unreleased
 
+## 0.3.4 - 2026-08-03
+
+### Upgrade Notes
+
+- Regenerate committed schemas after upgrading if any model uses `validates :attr, format: { with: ... }` on a column
+  that is nullable or has a database default. Those schemas contain a silently corrupted `new RegExp(...)` pattern.
+
+### Fixed
+
+- Preserve backslash escaping in generated `new RegExp(...)` patterns. A validation chain was spliced ahead of a
+  `.nullable()`, `.nullish()`, or `.optional()` suffix through a `String#sub` replacement string, which expanded the
+  chain's backslash sequences: `\\.` collapsed to `\.` and `\\s` to `\s`. The emitted pattern still parsed as valid
+  TypeScript but no longer matched the Ruby regexp it came from — most damagingly, the `\z` end anchor degraded from
+  `(?![\s\S])` to `(?![sS])`, so `.regex()` began accepting any value with a merely valid prefix. Columns without a
+  nullability suffix took a different branch and were unaffected, which is why input schemas were hit far more often
+  than response schemas.
+- Preserve backslash sequences inside a `ZOD_RAILS:CUSTOM:IMPORTS` block across regeneration. The same
+  replacement-string expansion rewrote hand-authored content the writer is meant to carry over untouched.
+
 ## 0.3.3 - 2026-08-03
 
 ### Changed

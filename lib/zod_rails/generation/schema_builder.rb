@@ -110,14 +110,16 @@ module ZodRails
         insert_validation_chain(base_type, validation_chain)
       end
 
+      # Splice by concatenation, never via a `sub` replacement string: those expand
+      # backslash sequences (`\\`, `\1`, `\&`), which silently corrupts the escaping
+      # in a generated `new RegExp("...")` literal.
       def insert_validation_chain(base_type, validation_chain)
         return base_type if validation_chain.empty?
 
-        if (match = base_type.match(NULLABILITY_SUFFIX_RE))
-          base_type.sub(NULLABILITY_SUFFIX_RE, "#{validation_chain}#{match[0]}")
-        else
-          "#{base_type}#{validation_chain}"
-        end
+        match = base_type.match(NULLABILITY_SUFFIX_RE)
+        return "#{base_type}#{validation_chain}" unless match
+
+        "#{match.pre_match}#{validation_chain}#{match[0]}"
       end
 
       def enum_column?(column_name)
