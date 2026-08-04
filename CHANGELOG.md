@@ -4,7 +4,7 @@ All notable changes to ZodRails are documented here.
 
 ## Unreleased
 
-## 0.3.4 - 2026-08-03
+## 0.3.4 - 2026-08-04
 
 ### Upgrade Notes
 

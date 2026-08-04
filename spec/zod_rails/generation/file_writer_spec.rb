@@ -152,8 +152,12 @@ RSpec.describe ZodRails::Generation::FileWriter do
       File.write(full_path, "#{generated.lines.first}\n#{escaped_block}#{generated.lines[1..].join}")
 
       writer.write(filename: filename, content: generated)
+      first_regeneration = File.read(full_path)
+      writer.write(filename: filename, content: generated)
 
-      expect(File.read(full_path)).to include('new RegExp("^[a-z\\\\d]+(?:-[a-z\\\\d]+)*$")')
+      expect(File.read(full_path)).to eq(first_regeneration)
+      expect(first_regeneration).to include('new RegExp("^[a-z\\\\d]+(?:-[a-z\\\\d]+)*$")')
+      expect(first_regeneration.scan("ZOD_RAILS:CUSTOM:IMPORTS:BEGIN").size).to eq(1)
     end
 
     it "places the imports block right after the zod import" do
